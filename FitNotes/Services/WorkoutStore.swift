@@ -1,9 +1,11 @@
 import Foundation
 import SwiftData
 
-enum WorkoutStoreError: LocalizedError {
+enum WorkoutStoreError: LocalizedError, Equatable {
     case invalidWeight
     case invalidReps
+    case workoutAlreadyFinished
+    case routineHasNoExercises
 
     var errorDescription: String? {
         switch self {
@@ -11,6 +13,10 @@ enum WorkoutStoreError: LocalizedError {
             return "Weight must be greater than zero."
         case .invalidReps:
             return "Reps must be greater than zero."
+        case .workoutAlreadyFinished:
+            return "Finished workouts can no longer be edited."
+        case .routineHasNoExercises:
+            return "Add exercises to the routine before starting it."
         }
     }
 }
@@ -18,12 +24,18 @@ enum WorkoutStoreError: LocalizedError {
 protocol WorkoutStore {
     func createOrResumeDraftWorkout() throws -> Workout
     func fetchActiveDraftWorkout() throws -> Workout?
-    func finishWorkout(_ workout: Workout) throws
+    func finishWorkout(_ workout: Workout, finishedAt: Date?) throws
+    func updateWorkout(_ workout: Workout, date: Date, startedAt: Date, finishedAt: Date?, comment: String) throws
+    func copyMostRecentFinishedWorkout(into workout: Workout) throws -> Int
     func deleteWorkout(_ workout: Workout) throws
     func deleteSet(_ workoutSet: WorkoutSet) throws
+    func updateSet(_ workoutSet: WorkoutSet, weight: Double, reps: Int, comment: String, isCompleted: Bool) throws
+    func toggleSetCompletion(_ workoutSet: WorkoutSet) throws
+    func moveSets(in workout: Workout, exercise: Exercise, fromOffsets: IndexSet, toOffset: Int) throws
+    func reorderExerciseGroups(in workout: Workout, orderedExerciseIDs: [PersistentIdentifier]) throws
     func fetchWorkoutHistory() throws -> [Workout]
     func fetchWorkout(id: PersistentIdentifier) throws -> Workout?
-    func addSet(to workout: Workout, exercise: Exercise, weight: Double, reps: Int) throws -> WorkoutSet
+    func addSet(to workout: Workout, exercise: Exercise, weight: Double, reps: Int, comment: String, isCompleted: Bool) throws -> WorkoutSet
     func fetchSets(for workout: Workout, exercise: Exercise) throws -> [WorkoutSet]
     func fetchSets(for workout: Workout) throws -> [WorkoutSet]
 }
@@ -59,12 +71,52 @@ struct DefaultWorkoutStore: WorkoutStore {
         return try context.fetch(descriptor).first
     }
 
-    func finishWorkout(_ workout: Workout) throws {
-        workout.finishedAt = Date()
-        if workout.date > workout.finishedAt ?? workout.date {
-            workout.date = workout.finishedAt ?? workout.date
+    func finishWorkout(_ workout: Workout, finishedAt: Date? = nil) throws {
+        let finalFinishedAt = finishedAt ?? Date()
+        workout.finishedAt = finalFinishedAt
+        if workout.date > finalFinishedAt {
+            workout.date = finalFinishedAt
+        }
+        if workout.startedAt > finalFinishedAt {
+            workout.startedAt = finalFinishedAt
         }
         try context.save()
+    }
+
+    func updateWorkout(_ workout: Workout, date: Date, startedAt: Date, finishedAt: Date?, comment: String) throws {
+        workout.date = date
+        workout.startedAt = startedAt
+        workout.finishedAt = finishedAt
+        workout.comment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        try context.save()
+    }
+
+    func copyMostRecentFinishedWorkout(into workout: Workout) throws -> Int {
+        let history = try fetchWorkoutHistory()
+        guard let previousWorkout = history.first else {
+            return 0
+        }
+
+        let groupedSets = previousWorkout.sets.groupedByExercise()
+        var copiedCount = 0
+
+        for group in groupedSets {
+            guard let exercise = group.exercise else { continue }
+
+            for set in group.sets {
+                _ = try addSet(
+                    to: workout,
+                    exercise: exercise,
+                    weight: set.weight,
+                    reps: set.reps,
+                    comment: set.comment,
+                    isCompleted: true
+                )
+                copiedCount += 1
+            }
+        }
+
+        return copiedCount
     }
 
     func deleteWorkout(_ workout: Workout) throws {
@@ -73,7 +125,54 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func deleteSet(_ workoutSet: WorkoutSet) throws {
+        let workout = workoutSet.workout
+        let exercise = workoutSet.exercise
         context.delete(workoutSet)
+        try context.save()
+        try normalizeSetOrdersIfNeeded(for: workout, exercise: exercise)
+    }
+
+    func updateSet(_ workoutSet: WorkoutSet, weight: Double, reps: Int, comment: String, isCompleted: Bool) throws {
+        guard weight > 0 else {
+            throw WorkoutStoreError.invalidWeight
+        }
+
+        guard reps > 0 else {
+            throw WorkoutStoreError.invalidReps
+        }
+
+        workoutSet.weight = weight
+        workoutSet.reps = reps
+        workoutSet.comment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
+        workoutSet.isCompleted = isCompleted
+        try context.save()
+    }
+
+    func toggleSetCompletion(_ workoutSet: WorkoutSet) throws {
+        workoutSet.isCompleted.toggle()
+        try context.save()
+    }
+
+    func moveSets(in workout: Workout, exercise: Exercise, fromOffsets: IndexSet, toOffset: Int) throws {
+        var sets = try fetchSets(for: workout, exercise: exercise)
+        moveItems(in: &sets, fromOffsets: fromOffsets, toOffset: toOffset)
+
+        for (index, set) in sets.enumerated() {
+            set.setOrder = index + 1
+        }
+
+        try context.save()
+    }
+
+    func reorderExerciseGroups(in workout: Workout, orderedExerciseIDs: [PersistentIdentifier]) throws {
+        let sets = try fetchSets(for: workout)
+        let groupedSets = Dictionary(grouping: sets) { $0.exercise?.persistentModelID }
+
+        for (index, exerciseID) in orderedExerciseIDs.enumerated() {
+            let newOrder = index + 1
+            groupedSets[exerciseID]?.forEach { $0.exerciseOrder = newOrder }
+        }
+
         try context.save()
     }
 
@@ -96,7 +195,14 @@ struct DefaultWorkoutStore: WorkoutStore {
         return try context.fetch(descriptor).first
     }
 
-    func addSet(to workout: Workout, exercise: Exercise, weight: Double, reps: Int) throws -> WorkoutSet {
+    func addSet(
+        to workout: Workout,
+        exercise: Exercise,
+        weight: Double,
+        reps: Int,
+        comment: String = "",
+        isCompleted: Bool = false
+    ) throws -> WorkoutSet {
         guard weight > 0 else {
             throw WorkoutStoreError.invalidWeight
         }
@@ -105,22 +211,27 @@ struct DefaultWorkoutStore: WorkoutStore {
             throw WorkoutStoreError.invalidReps
         }
 
-        let workoutID = workout.persistentModelID
-        let exerciseID = exercise.persistentModelID
+        guard workout.isInProgress else {
+            throw WorkoutStoreError.workoutAlreadyFinished
+        }
 
-        let existingSets = try context.fetch(FetchDescriptor<WorkoutSet>(
-            predicate: #Predicate<WorkoutSet> { set in
-                set.workout?.persistentModelID == workoutID &&
-                set.exercise?.persistentModelID == exerciseID
-            },
-            sortBy: [SortDescriptor(\.setOrder, order: .reverse)]
-        ))
-
-        let nextSetOrder = (existingSets.first?.setOrder ?? 0) + 1
+        let existingSets = try fetchSets(for: workout, exercise: exercise)
+        let nextSetOrder = (existingSets.map(\.setOrder).max() ?? 0) + 1
+        let exerciseOrder: Int
+        if let existingOrder = existingSets.first?.exerciseOrder {
+            exerciseOrder = existingOrder
+        } else {
+            exerciseOrder = try nextExerciseOrder(in: workout) + 1
+        }
         let workoutSet = WorkoutSet(
+            exerciseOrder: exerciseOrder,
             setOrder: nextSetOrder,
             weight: weight,
             reps: reps,
+            comment: comment.trimmingCharacters(in: .whitespacesAndNewlines),
+            isCompleted: isCompleted,
+            exerciseNameSnapshot: exercise.name,
+            muscleGroupNameSnapshot: exercise.muscleGroup?.name ?? "Uncategorized",
             workout: workout,
             exercise: exercise
         )
@@ -150,7 +261,32 @@ struct DefaultWorkoutStore: WorkoutStore {
             predicate: #Predicate<WorkoutSet> { set in
                 set.workout?.persistentModelID == workoutID
             },
-            sortBy: [SortDescriptor(\.setOrder)]
+            sortBy: [SortDescriptor(\.exerciseOrder), SortDescriptor(\.setOrder)]
         ))
+    }
+
+    private func nextExerciseOrder(in workout: Workout) throws -> Int {
+        let sets = try fetchSets(for: workout)
+        return sets.map(\.exerciseOrder).max() ?? 0
+    }
+
+    private func normalizeSetOrdersIfNeeded(for workout: Workout?, exercise: Exercise?) throws {
+        guard let workout, let exercise else {
+            return
+        }
+
+        let remainingSets = try fetchSets(for: workout, exercise: exercise)
+        for (index, set) in remainingSets.enumerated() {
+            set.setOrder = index + 1
+        }
+        try context.save()
+    }
+
+    private func moveItems<T>(in items: inout [T], fromOffsets: IndexSet, toOffset: Int) {
+        let movingItems = fromOffsets.map { items[$0] }
+        for index in fromOffsets.sorted(by: >) {
+            items.remove(at: index)
+        }
+        items.insert(contentsOf: movingItems, at: min(toOffset, items.count))
     }
 }

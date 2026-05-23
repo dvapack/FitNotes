@@ -307,4 +307,222 @@ final class FitNotesTests: XCTestCase {
         XCTAssertEqual(importedSets.map(\.setOrder), [1, 2])
         XCTAssertEqual(importedSets.map(\.reps), [10, 8])
     }
+
+    func testStatisticsSnapshotSummarizesPersonalRecords() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let calendar = Calendar(identifier: .gregorian)
+        let chest = MuscleGroup(name: "Chest", sortOrder: 0)
+        let bench = Exercise(name: "Bench Press", normalizedName: "bench press", isCustom: false, muscleGroup: chest)
+        let fly = Exercise(name: "Dumbbell Fly", normalizedName: "dumbbell fly", isCustom: false, muscleGroup: chest)
+
+        let workoutOneDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 5, day: 20)))
+        let workoutTwoDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 5, day: 21)))
+        let workoutOne = Workout(date: workoutOneDate, startedAt: workoutOneDate, finishedAt: workoutOneDate)
+        let workoutTwo = Workout(date: workoutTwoDate, startedAt: workoutTwoDate, finishedAt: workoutTwoDate)
+
+        context.insert(chest)
+        context.insert(bench)
+        context.insert(fly)
+        context.insert(workoutOne)
+        context.insert(workoutTwo)
+        context.insert(WorkoutSet(setOrder: 1, weight: 100, reps: 5, workout: workoutOne, exercise: bench))
+        context.insert(WorkoutSet(setOrder: 2, weight: 105, reps: 3, workout: workoutOne, exercise: bench))
+        context.insert(WorkoutSet(setOrder: 1, weight: 20, reps: 12, workout: workoutTwo, exercise: fly))
+        context.insert(WorkoutSet(setOrder: 1, weight: 110, reps: 2, workout: workoutTwo, exercise: bench))
+        try context.save()
+
+        let workouts = try context.fetch(FetchDescriptor<Workout>(sortBy: [SortDescriptor(\.startedAt)]))
+        let snapshot = WorkoutStatisticsSnapshot(workouts: workouts, calendar: calendar)
+
+        XCTAssertEqual(snapshot.completedWorkoutCount, 2)
+        XCTAssertEqual(snapshot.totalSetCount, 4)
+        XCTAssertEqual(snapshot.uniqueExerciseCount, 2)
+        XCTAssertEqual(snapshot.heaviestWeight, 110)
+        XCTAssertEqual(snapshot.personalRecords.first?.exerciseName, "Bench Press")
+        XCTAssertEqual(snapshot.personalRecords.first?.maxWeight, 110)
+    }
+
+    func testStatisticsSnapshotBuildsProgressionPointsByRangeAndGranularity() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let calendar = Calendar(identifier: .gregorian)
+        let chest = MuscleGroup(name: "Chest", sortOrder: 0)
+        let bench = Exercise(name: "Bench Press", normalizedName: "bench press", isCustom: false, muscleGroup: chest)
+
+        let firstDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 4, day: 1)))
+        let secondDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 5, day: 20)))
+        let thirdDate = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 5, day: 22)))
+        let firstWorkout = Workout(date: firstDate, startedAt: firstDate, finishedAt: firstDate)
+        let secondWorkout = Workout(date: secondDate, startedAt: secondDate, finishedAt: secondDate)
+        let thirdWorkout = Workout(date: thirdDate, startedAt: thirdDate, finishedAt: thirdDate)
+
+        context.insert(chest)
+        context.insert(bench)
+        context.insert(firstWorkout)
+        context.insert(secondWorkout)
+        context.insert(thirdWorkout)
+        context.insert(WorkoutSet(setOrder: 1, weight: 90, reps: 8, workout: firstWorkout, exercise: bench))
+        context.insert(WorkoutSet(setOrder: 1, weight: 95, reps: 6, workout: secondWorkout, exercise: bench))
+        context.insert(WorkoutSet(setOrder: 2, weight: 100, reps: 5, workout: secondWorkout, exercise: bench))
+        context.insert(WorkoutSet(setOrder: 1, weight: 105, reps: 3, workout: thirdWorkout, exercise: bench))
+        try context.save()
+
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        let snapshot = WorkoutStatisticsSnapshot(workouts: workouts, calendar: calendar)
+        let allTimePoints = snapshot.progression(
+            for: bench.persistentModelID,
+            metric: .maxWeight,
+            range: .allTime,
+            granularity: .day
+        )
+        let recentPoints = snapshot.progression(
+            for: bench.persistentModelID,
+            metric: .maxWeight,
+            range: .last30Days,
+            granularity: .day
+        )
+        let weeklyVolume = snapshot.progression(
+            for: bench.persistentModelID,
+            metric: .totalVolume,
+            range: .last30Days,
+            granularity: .week
+        )
+        let summary = snapshot.progressionSummary(
+            for: bench.persistentModelID,
+            metric: .maxWeight,
+            range: .last30Days,
+            granularity: .day
+        )
+
+        XCTAssertEqual(allTimePoints.count, 3)
+        XCTAssertEqual(allTimePoints.map(\.value), [90, 100, 105])
+        XCTAssertEqual(recentPoints.count, 2)
+        XCTAssertEqual(recentPoints.map(\.date), [secondDate, thirdDate])
+        XCTAssertEqual(weeklyVolume.count, 1)
+        XCTAssertEqual(weeklyVolume.first?.value, 1385)
+        XCTAssertEqual(summary.bestValue, 105)
+        XCTAssertEqual(summary.recentValue, 105)
+        XCTAssertEqual(summary.changeFromFirst, 5)
+    }
+
+    func testUpdateWorkoutPersistsDateAndComment() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let store = DefaultWorkoutStore(context: context)
+        let calendar = Calendar(identifier: .gregorian)
+        let date = try XCTUnwrap(calendar.date(from: DateComponents(year: 2026, month: 6, day: 1, hour: 9)))
+        let workout = try store.createOrResumeDraftWorkout()
+
+        try store.updateWorkout(workout, date: date, startedAt: date, finishedAt: nil, comment: "Heavy push day")
+
+        XCTAssertEqual(workout.comment, "Heavy push day")
+        XCTAssertEqual(workout.date, date)
+        XCTAssertEqual(workout.startedAt, date)
+    }
+
+    func testSavedSetsDefaultToCompletedAndStayCompletedAfterEditing() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let seeder = SeedDataService(context: context)
+        let exerciseStore = DefaultExerciseStore(context: context)
+        let workoutStore = DefaultWorkoutStore(context: context)
+
+        try seeder.seedIfNeeded()
+        let group = try XCTUnwrap(try exerciseStore.fetchMuscleGroups().first)
+        let exercise = try XCTUnwrap(try exerciseStore.fetchExercises(for: group).first)
+        let workout = try workoutStore.createOrResumeDraftWorkout()
+        let set = try workoutStore.addSet(to: workout, exercise: exercise, weight: 80, reps: 8, comment: "", isCompleted: true)
+
+        XCTAssertTrue(set.isCompleted)
+
+        try workoutStore.updateSet(set, weight: 82.5, reps: 6, comment: "Top set", isCompleted: true)
+
+        XCTAssertEqual(set.weight, 82.5)
+        XCTAssertEqual(set.reps, 6)
+        XCTAssertEqual(set.comment, "Top set")
+        XCTAssertTrue(set.isCompleted)
+    }
+
+    func testMoveSetsReordersSetOrder() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let seeder = SeedDataService(context: context)
+        let exerciseStore = DefaultExerciseStore(context: context)
+        let workoutStore = DefaultWorkoutStore(context: context)
+
+        try seeder.seedIfNeeded()
+        let group = try XCTUnwrap(try exerciseStore.fetchMuscleGroups().first)
+        let exercise = try XCTUnwrap(try exerciseStore.fetchExercises(for: group).first)
+        let workout = try workoutStore.createOrResumeDraftWorkout()
+        _ = try workoutStore.addSet(to: workout, exercise: exercise, weight: 60, reps: 10, comment: "", isCompleted: true)
+        _ = try workoutStore.addSet(to: workout, exercise: exercise, weight: 70, reps: 8, comment: "", isCompleted: true)
+        _ = try workoutStore.addSet(to: workout, exercise: exercise, weight: 80, reps: 6, comment: "", isCompleted: true)
+
+        try workoutStore.moveSets(in: workout, exercise: exercise, fromOffsets: IndexSet(integer: 2), toOffset: 0)
+
+        let sets = try workoutStore.fetchSets(for: workout, exercise: exercise)
+        XCTAssertEqual(sets.map(\.weight), [80, 60, 70])
+        XCTAssertEqual(sets.map(\.setOrder), [1, 2, 3])
+    }
+
+    func testExerciseStoreSearchAndFavorite() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let seeder = SeedDataService(context: context)
+        let store = DefaultExerciseStore(context: context)
+
+        try seeder.seedIfNeeded()
+        let chest = try XCTUnwrap(try store.fetchMuscleGroups().first(where: { $0.name == "Chest" }))
+        let exercise = try store.createExercise(name: "Cable Press", in: chest, isCustom: true)
+        try store.toggleFavorite(exercise)
+
+        let searchResults = try store.searchExercises(query: "cable", favoritesOnly: false)
+        let favoriteResults = try store.searchExercises(query: "", favoritesOnly: true)
+
+        XCTAssertTrue(searchResults.contains(where: { $0.persistentModelID == exercise.persistentModelID }))
+        XCTAssertTrue(favoriteResults.contains(where: { $0.persistentModelID == exercise.persistentModelID }))
+    }
+
+    func testRoutineStartCreatesWorkoutSetsFromTemplate() throws {
+        let container = ModelContainerFactory.makeInMemoryContainer()
+        let context = ModelContext(container)
+        let seeder = SeedDataService(context: context)
+        let exerciseStore = DefaultExerciseStore(context: context)
+        let routineStore = RoutineStore(context: context)
+        let workoutStore = DefaultWorkoutStore(context: context)
+
+        try seeder.seedIfNeeded()
+        let chest = try XCTUnwrap(try exerciseStore.fetchMuscleGroups().first(where: { $0.name == "Chest" }))
+        let bench = try XCTUnwrap(try exerciseStore.fetchExercises(for: chest).first)
+        _ = try routineStore.createRoutine(
+            name: "Push Day",
+            notes: "Main lift",
+            dayName: "Day 1",
+            exercises: [RoutineExerciseDraft(exercise: bench, weight: 100, reps: 5, setCount: 3)]
+        )
+
+        let routine = try XCTUnwrap(try routineStore.fetchRoutines().first)
+        let workout = try routineStore.startRoutine(routine)
+        let sets = try workoutStore.fetchSets(for: workout, exercise: bench)
+
+        XCTAssertEqual(workout.comment, "Routine: Push Day")
+        XCTAssertEqual(sets.count, 3)
+        XCTAssertEqual(sets.map(\.weight), [100, 100, 100])
+        XCTAssertTrue(sets.allSatisfy(\.isCompleted))
+    }
+
+    func testWorkoutToolsServiceCalculatesMetrics() {
+        let tools = WorkoutToolsService()
+
+        let oneRepMax = tools.estimateOneRepMax(weight: 100, reps: 5)
+        let projectedWeight = tools.projectedWorkingWeight(oneRepMax: 120, intensity: 0.75)
+        let volume = tools.volume(weight: 80, reps: 8, sets: 4)
+        let plates = tools.plateBreakdown(totalWeight: 100)
+
+        XCTAssertNotNil(oneRepMax)
+        XCTAssertEqual(projectedWeight, 90)
+        XCTAssertEqual(volume, 2560)
+        XCTAssertFalse(plates.isEmpty)
+    }
 }

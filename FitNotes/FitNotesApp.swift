@@ -3,7 +3,13 @@ import SwiftData
 
 @main
 struct FitNotesApp: App {
-    private let sharedModelContainer = ModelContainerFactory.makeSharedContainer()
+    private let sharedModelContainer: ModelContainer = {
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            return ModelContainerFactory.makeInMemoryContainer()
+        }
+
+        return ModelContainerFactory.makeSharedContainer()
+    }()
 
     var body: some Scene {
         WindowGroup {

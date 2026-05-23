@@ -1,39 +1,64 @@
 # FitNotes Progress
 
-## Phase 1 Checklist
-- [x] Create the notes system in `docs/notes`.
-- [x] Restructure the app into `Models`, `Features`, `Services`, and `Shared`.
-- [x] Add SwiftData model types for muscle groups, exercises, workouts, and workout sets.
-- [x] Seed the default English catalog once on first launch.
-- [x] Add workout and exercise store layers.
-- [x] Support a single active draft workout with resume behavior.
-- [x] Replace the starter UI with a minimal shell for Home, History, and Import.
-- [x] Add tests for seeding, draft persistence, and exercise deduplication.
+## Shipped Baseline
+- [x] Notes system created in `docs/notes`.
+- [x] SwiftData models for muscle groups, exercises, workouts, and workout sets.
+- [x] Seeded default English catalog.
+- [x] Store-based draft workout lifecycle with single active draft behavior.
+- [x] Home, History, and CSV Import flows.
+- [x] Statistics tab with progression and personal record summaries.
+- [x] Workout builder with custom categories/exercises, validated set entry, deletion, and finish/discard flows.
+- [x] Richer workout metadata: workout comment, editable date, set comments, set editing, set reordering, copy-most-recent workout, and share text.
+- [x] Exercise library foundation: favorites, notes, category color metadata, search, edit/delete, rest defaults, type/unit metadata.
+- [x] Routine foundation: routine models, create routine, inspect routine, and start routine into a draft workout.
+- [x] Workout tools foundation: estimated 1RM, set calculator, and plate calculator.
+- [x] Regression coverage expanded to 25 tests.
 
-## Phase 2 Checklist
-- [x] Build the workout builder on top of the Phase 1 draft workout flow.
-- [x] Add muscle group and exercise selection.
-- [x] Add custom exercise creation.
-- [x] Add validated set entry with automatic set ordering.
-- [x] Show current exercise sets and a full workout summary while building.
-- [x] Finish workouts and remove them from active draft state.
-- [x] Show workout detail from History.
-- [x] Add tests for set ordering and finished workout history.
+## Phase 5 Checklist: Migration Safety and Data Compatibility
+- [ ] Add real migration coverage for older on-device stores.
+- [ ] Replace destructive recovery assumptions for production store loading.
+- [ ] Define backfill defaults for schema-expanded fields.
+- [ ] Verify richer schema compatibility with CSV import and seeding.
 
-## Phase 3 Checklist
-- [x] Add a document picker import flow.
-- [x] Parse FitNotes CSV exports.
-- [x] Normalize, validate, and persist imported workouts.
-- [x] Show an import summary with skipped rows.
+## Phase 6 Checklist: Workout Flow Depth and Navigation Polish
+- [ ] Add visible exercise reordering UI in active workouts.
+- [ ] Improve in-workout navigation and training-session layout.
+- [ ] Add visible rest timer UX.
+- [ ] Improve copy/merge behavior when starting routines into drafts.
+- [ ] Add clearer duration and finish-time editing UX.
 
-## Phase 4 Checklist
-- [x] Improve navigation and interaction details.
-- [x] Add stronger validation and recovery paths.
-- [x] Improve accessibility.
-- [x] Expand automated coverage for primary flows.
+## Phase 7 Checklist: Exercise Insights and Goals
+- [ ] Add exercise overview screens.
+- [ ] Add per-exercise history screens.
+- [ ] Add richer PR presentation and goal tracking.
+- [ ] Link library items into exercise insights.
+
+## Phase 8 Checklist: Calendar and Training Review
+- [ ] Add month calendar view.
+- [ ] Add list view and filtering.
+- [ ] Reuse category colors and workout summaries in calendar UI.
+- [ ] Add workout-detail and exercise-detail drill-ins from the calendar.
+
+## Phase 9 Checklist: Settings and App Behavior Controls
+- [ ] Add persisted app settings model/service.
+- [ ] Add unit system and increment settings.
+- [ ] Add calendar, PR, set-complete, next-set, and wake-lock settings.
+- [ ] Add home screen display preferences.
+
+## Phase 10 Checklist: Data Portability and Backup
+- [ ] Add full-app export.
+- [ ] Add restore flow.
+- [ ] Add spreadsheet export.
+- [ ] Add destructive reset flows with explicit confirmations.
+
+## Phase 11 Checklist: Body Tracker
+- [ ] Add configurable body measurements.
+- [ ] Add custom measurement units and enable/disable behavior.
+- [ ] Add body history and graphing.
+- [ ] Add body-goal support.
 
 ## Work Log
-- 2026-05-23: Added the notes system and wrote the Phase 1 roadmap, progress tracker, and decision log.
+- 2026-05-23: Added the notes system and wrote the original roadmap, progress tracker, and decision log.
 - 2026-05-23: Replaced the starter hardcoded exercise flow with SwiftData models and English seed data.
 - 2026-05-23: Added store-based draft workout handling and a minimal tab-based app shell.
 - 2026-05-23: Added automated tests for seeding, workout draft lifecycle, and duplicate exercise handling.
@@ -45,3 +70,6 @@
 - 2026-05-23: Added discard and empty-finish confirmations, keyboard flow polish, overview stats, and draft deletion test coverage.
 - 2026-05-23: Switched the workout builder to reactive SwiftData queries so saved workouts, sets, muscle groups, and exercises stay visible immediately.
 - 2026-05-23: Added deletion support for saved sets during a workout and for completed workouts from History, with regression tests.
+- 2026-05-23: Added the first FitNotes adaptation slice: richer workout/exercise/set metadata, routine models and flows, workout tools, a library tab, additional tabs in the shell, and expanded regression coverage.
+- 2026-05-23: Rebased the notes to show the new shipped baseline and split the remaining work into Phases 5-11.
+- 2026-05-23: Simplified the workout builder so saved sets are treated as completed immediately and exercise selection no longer uses an in-builder search field.

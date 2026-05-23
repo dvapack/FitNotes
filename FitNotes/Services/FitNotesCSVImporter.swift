@@ -162,11 +162,17 @@ struct FitNotesCSVImporter {
             let exercise = try exerciseStore.createExercise(name: row.exerciseName, in: muscleGroup, isCustom: true)
             let setKey = "\(row.date.timeIntervalSinceReferenceDate)|\(exercise.persistentModelID)"
             let nextSetOrder = (setOrderByDateAndExercise[setKey] ?? 0) + 1
+            let exerciseOrder = workoutsByDate[row.date]?.sets
+                .filter { $0.exercise?.persistentModelID == exercise.persistentModelID }
+                .first?.exerciseOrder ?? ((workoutsByDate[row.date]?.sets.map(\.exerciseOrder).max() ?? 0) + ((setOrderByDateAndExercise[setKey] == nil) ? 1 : 0))
 
             let workoutSet = WorkoutSet(
+                exerciseOrder: exerciseOrder,
                 setOrder: nextSetOrder,
                 weight: row.weight,
                 reps: row.reps,
+                exerciseNameSnapshot: exercise.name,
+                muscleGroupNameSnapshot: muscleGroup.name,
                 workout: workout,
                 exercise: exercise
             )

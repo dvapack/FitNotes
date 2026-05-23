@@ -1,4 +1,5 @@
 import SwiftData
+import Foundation
 
 enum ModelContainerFactory {
     static let schema = Schema([
@@ -6,6 +7,10 @@ enum ModelContainerFactory {
         Exercise.self,
         Workout.self,
         WorkoutSet.self,
+        Routine.self,
+        RoutineDay.self,
+        RoutineExercise.self,
+        RoutineTemplateSet.self,
     ])
 
     static func makeSharedContainer() -> ModelContainer {
@@ -13,7 +18,12 @@ enum ModelContainerFactory {
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            fatalError("Failed to create shared model container: \(error)")
+            do {
+                try resetDefaultStoreFiles()
+                return try ModelContainer(for: schema, configurations: [configuration])
+            } catch {
+                fatalError("Failed to create shared model container: \(error)")
+            }
         }
     }
 
@@ -23,6 +33,24 @@ enum ModelContainerFactory {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             fatalError("Failed to create in-memory model container: \(error)")
+        }
+    }
+
+    private static func resetDefaultStoreFiles() throws {
+        let applicationSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let storeURL = applicationSupport.appendingPathComponent("default.store")
+        let sidecarExtensions = ["", "-shm", "-wal"]
+
+        for suffix in sidecarExtensions {
+            let candidateURL = suffix.isEmpty ? storeURL : applicationSupport.appendingPathComponent("default.store\(suffix)")
+            if FileManager.default.fileExists(atPath: candidateURL.path()) {
+                try FileManager.default.removeItem(at: candidateURL)
+            }
         }
     }
 }

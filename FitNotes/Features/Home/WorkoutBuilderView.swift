@@ -17,10 +17,15 @@ struct WorkoutBuilderView: View {
     @State private var selectedExerciseID: PersistentIdentifier?
     @State private var weightText = ""
     @State private var repsText = ""
+    @State private var setCommentText = ""
+    @State private var workoutComment = ""
+    @State private var workoutDate = Date()
     @State private var showingMuscleGroupSheet = false
     @State private var showingExerciseSheet = false
     @State private var showingDiscardConfirmation = false
     @State private var showingFinishEmptyConfirmation = false
+    @State private var showingToolsSheet = false
+    @State private var editingSet: WorkoutSet?
     @State private var alertMessage: String?
 
     private var exerciseStore: DefaultExerciseStore {
@@ -101,12 +106,21 @@ struct WorkoutBuilderView: View {
     var body: some View {
         List {
             Section("Workout") {
+                DatePicker("Workout Date", selection: $workoutDate, displayedComponents: [.date, .hourAndMinute])
+
                 LabeledContent("Started") {
                     Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
                 }
 
                 LabeledContent("Status") {
                     Text(workout.isInProgress ? "In Progress" : "Finished")
+                }
+
+                TextField("Workout comment", text: $workoutComment, axis: .vertical)
+                    .lineLimit(2...4)
+
+                Button("Save Workout Details") {
+                    persistWorkoutMetadata()
                 }
             }
 
@@ -154,37 +168,9 @@ struct WorkoutBuilderView: View {
                 }
             }
 
-            Section("Add Set") {
-                TextField("Weight", text: $weightText)
-                    .keyboardType(.decimalPad)
-                    .focused($focusedField, equals: .weight)
-                    .submitLabel(.next)
+            addSetSection
 
-                TextField("Reps", text: $repsText)
-                    .keyboardType(.numberPad)
-                    .focused($focusedField, equals: .reps)
-                    .submitLabel(.done)
-
-                Button("Save Set") {
-                    saveSet()
-                }
-                .disabled(!canAddSet)
-            }
-
-            Section(currentExerciseSectionTitle) {
-                if currentExerciseSets.isEmpty {
-                    ContentUnavailableView(
-                        "No sets yet",
-                        systemImage: "list.number",
-                        description: Text("Add the first set for the selected exercise.")
-                    )
-                } else {
-                    ForEach(currentExerciseSets) { workoutSet in
-                        SetRowView(set: workoutSet)
-                    }
-                    .onDelete(perform: deleteCurrentExerciseSets)
-                }
-            }
+            currentExerciseSection
 
             Section("Workout Summary") {
                 if groupedSets.isEmpty {
@@ -196,6 +182,13 @@ struct WorkoutBuilderView: View {
                 } else {
                     ForEach(groupedSets) { group in
                         WorkoutExerciseSummaryView(group: group)
+                    }
+
+                    ShareLink(
+                        item: workoutShareText,
+                        preview: SharePreview("Workout Summary", image: Image(systemName: "square.and.arrow.up"))
+                    ) {
+                        Label("Share Workout", systemImage: "square.and.arrow.up")
                     }
                 }
             }
@@ -214,6 +207,14 @@ struct WorkoutBuilderView: View {
                         handleFinishTapped()
                     }
                 }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingToolsSheet = true
+                    } label: {
+                        Image(systemName: "hammer")
+                    }
+                }
             }
         }
         .sheet(isPresented: $showingExerciseSheet) {
@@ -229,7 +230,15 @@ struct WorkoutBuilderView: View {
                 createMuscleGroup(named: name)
             }
         }
+        .sheet(isPresented: $showingToolsSheet) {
+            WorkoutToolsSheet(weightText: $weightText, repsText: $repsText)
+        }
+        .sheet(item: $editingSet) { workoutSet in
+            SetEditorSheet(set: workoutSet)
+        }
         .onAppear {
+            workoutDate = workout.date
+            workoutComment = workout.comment
             syncSelections()
         }
         .onChange(of: muscleGroups.map(\.persistentModelID)) { _, _ in
@@ -370,9 +379,17 @@ struct WorkoutBuilderView: View {
         }
 
         do {
-            _ = try workoutStore.addSet(to: workout, exercise: selectedExercise, weight: weight, reps: reps)
+            _ = try workoutStore.addSet(
+                to: workout,
+                exercise: selectedExercise,
+                weight: weight,
+                reps: reps,
+                comment: setCommentText,
+                isCompleted: true
+            )
             weightText = ""
             repsText = ""
+            setCommentText = ""
             focusedField = .weight
         } catch {
             alertMessage = "The set could not be saved."
@@ -389,6 +406,13 @@ struct WorkoutBuilderView: View {
 
     private func finishWorkout() {
         do {
+            try workoutStore.updateWorkout(
+                workout,
+                date: workoutDate,
+                startedAt: workout.startedAt,
+                finishedAt: workout.finishedAt,
+                comment: workoutComment
+            )
             try workoutStore.finishWorkout(workout)
             dismiss()
         } catch {
@@ -412,6 +436,92 @@ struct WorkoutBuilderView: View {
             }
         } catch {
             alertMessage = "The set could not be deleted."
+        }
+    }
+
+    private func moveCurrentExerciseSets(from offsets: IndexSet, to destination: Int) {
+        guard let selectedExercise else { return }
+
+        do {
+            try workoutStore.moveSets(in: workout, exercise: selectedExercise, fromOffsets: offsets, toOffset: destination)
+        } catch {
+            alertMessage = "The set order could not be updated."
+        }
+    }
+
+    private func copyPreviousWorkout() {
+        do {
+            let copiedCount = try workoutStore.copyMostRecentFinishedWorkout(into: workout)
+            alertMessage = copiedCount == 0 ? "No finished workout is available to copy." : "Copied \(copiedCount) sets from the most recent finished workout."
+        } catch {
+            alertMessage = "The previous workout could not be copied."
+        }
+    }
+
+    private func persistWorkoutMetadata() {
+        do {
+            try workoutStore.updateWorkout(
+                workout,
+                date: workoutDate,
+                startedAt: workout.startedAt,
+                finishedAt: workout.finishedAt,
+                comment: workoutComment
+            )
+        } catch {
+            alertMessage = "The workout details could not be saved."
+        }
+    }
+
+    private var workoutShareText: String {
+        let header = "Workout on \(workout.date.formatted(date: .abbreviated, time: .shortened))"
+        let commentLine = workout.comment.isEmpty ? nil : "Comment: \(workout.comment)"
+        let lines = groupedSets.flatMap { group in
+            [group.title] + group.sets.map {
+                "Set \($0.setOrder): \($0.weight.formatted(.number.precision(.fractionLength(0...2)))) kg x \($0.reps)\($0.comment.isEmpty ? "" : " (\($0.comment))")"
+            }
+        }
+        return ([header] + (commentLine.map { [$0] } ?? []) + lines).joined(separator: "\n")
+    }
+
+    private var addSetSection: some View {
+        Section("Add Set") {
+            TextField("Weight", text: $weightText)
+                .keyboardType(.decimalPad)
+                .focused($focusedField, equals: .weight)
+                .submitLabel(.next)
+
+            TextField("Reps", text: $repsText)
+                .keyboardType(.numberPad)
+                .focused($focusedField, equals: .reps)
+                .submitLabel(.done)
+
+            TextField("Set comment", text: $setCommentText)
+
+            Button("Save Set") {
+                saveSet()
+            }
+            .disabled(!canAddSet)
+
+            Button("Copy Most Recent Workout") {
+                copyPreviousWorkout()
+            }
+        }
+    }
+
+    private var currentExerciseSection: some View {
+        Section(currentExerciseSectionTitle) {
+            if currentExerciseSets.isEmpty {
+                Text("Add the first set for the selected exercise.")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(currentExerciseSets) { workoutSet in
+                    SetRowView(set: workoutSet) {
+                        editingSet = workoutSet
+                    }
+                }
+                .onDelete(perform: deleteCurrentExerciseSets)
+                .onMove(perform: moveCurrentExerciseSets)
+            }
         }
     }
 }
@@ -480,18 +590,31 @@ private struct CustomMuscleGroupSheet: View {
 
 private struct SetRowView: View {
     let set: WorkoutSet
+    let onEdit: () -> Void
 
     var body: some View {
         HStack {
-            Text("Set \(set.setOrder)")
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text("\(set.weight.formatted(.number.precision(.fractionLength(0...2)))) kg")
-            Text("x")
-                .foregroundStyle(.secondary)
-            Text("\(set.reps)")
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text("Set \(set.setOrder)")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Text("\(set.weight.formatted(.number.precision(.fractionLength(0...2)))) kg")
+                    Text("x")
+                        .foregroundStyle(.secondary)
+                    Text("\(set.reps)")
+                }
+
+                if !set.comment.isEmpty {
+                    Text(set.comment)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .font(.subheadline)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onEdit)
     }
 }
 
@@ -507,7 +630,7 @@ private struct WorkoutExerciseSummaryView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(group.sets) { workoutSet in
-                SetRowView(set: workoutSet)
+                SetRowView(set: workoutSet, onEdit: {})
             }
         }
         .padding(.vertical, 4)
@@ -576,6 +699,149 @@ private struct CustomExerciseSheet: View {
             dismiss()
         } else {
             validationMessage = "The exercise could not be saved."
+        }
+    }
+}
+
+private struct SetEditorSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let set: WorkoutSet
+
+    @State private var weightText: String
+    @State private var repsText: String
+    @State private var comment: String
+    @State private var errorMessage: String?
+
+    init(set: WorkoutSet) {
+        self.set = set
+        _weightText = State(initialValue: set.weight.formatted(.number.precision(.fractionLength(0...2))))
+        _repsText = State(initialValue: "\(set.reps)")
+        _comment = State(initialValue: set.comment)
+    }
+
+    private var workoutStore: DefaultWorkoutStore {
+        DefaultWorkoutStore(context: modelContext)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("Weight", text: $weightText)
+                    .keyboardType(.decimalPad)
+                TextField("Reps", text: $repsText)
+                    .keyboardType(.numberPad)
+                TextField("Comment", text: $comment, axis: .vertical)
+                    .lineLimit(2...4)
+            }
+            .navigationTitle("Edit Set")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { save() }
+                }
+            }
+            .alert("Unable to save", isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage ?? "")
+            }
+        }
+    }
+
+    private func save() {
+        guard let weight = Double(weightText.replacingOccurrences(of: ",", with: ".")),
+              let reps = Int(repsText) else {
+            errorMessage = "Enter a valid weight and rep count."
+            return
+        }
+
+        do {
+            try workoutStore.updateSet(set, weight: weight, reps: reps, comment: comment, isCompleted: true)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct WorkoutToolsSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @Binding var weightText: String
+    @Binding var repsText: String
+
+    @State private var targetWeightText = "100"
+    @State private var intensity = 0.75
+    private let tools = WorkoutToolsService()
+
+    private var currentWeight: Double? {
+        Double(weightText.replacingOccurrences(of: ",", with: "."))
+    }
+
+    private var currentReps: Int? {
+        Int(repsText)
+    }
+
+    private var oneRepMax: EstimatedOneRepMax? {
+        guard let currentWeight, let currentReps else { return nil }
+        return tools.estimateOneRepMax(weight: currentWeight, reps: currentReps)
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Estimated 1RM") {
+                    if let oneRepMax {
+                        LabeledContent("Recommended") {
+                            Text(oneRepMax.recommended.formatted(.number.precision(.fractionLength(0...1))) + " kg")
+                        }
+                        LabeledContent("Epley") {
+                            Text(oneRepMax.epley.formatted(.number.precision(.fractionLength(0...1))) + " kg")
+                        }
+                        LabeledContent("Brzycki") {
+                            Text(oneRepMax.brzycki.formatted(.number.precision(.fractionLength(0...1))) + " kg")
+                        }
+                    } else {
+                        Text("Enter weight and reps in the workout builder to calculate 1RM.")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("Set Calculator") {
+                    Slider(value: $intensity, in: 0.5...1.0, step: 0.025)
+                    Text("Intensity \(Int(intensity * 100))%")
+                    if let oneRepMax,
+                       let projected = tools.projectedWorkingWeight(oneRepMax: oneRepMax.recommended, intensity: intensity) {
+                        Text("Projected working weight: \(projected.formatted(.number.precision(.fractionLength(0...1)))) kg")
+                    }
+                }
+
+                Section("Plate Calculator") {
+                    TextField("Target Weight", text: $targetWeightText)
+                        .keyboardType(.decimalPad)
+                    if let targetWeight = Double(targetWeightText.replacingOccurrences(of: ",", with: ".")) {
+                        ForEach(tools.plateBreakdown(totalWeight: targetWeight)) { plate in
+                            HStack {
+                                Text("\(plate.plate.formatted(.number.precision(.fractionLength(0...2)))) kg")
+                                Spacer()
+                                Text("\(plate.count) per side")
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("Workout Tools")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Done") { dismiss() }
+                }
+            }
         }
     }
 }

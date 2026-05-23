@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		178E24C52FC2027C002E61F5 /* readme.md in Resources */ = {isa = PBXBuildFile; fileRef = 178E24C42FC20275002E61F5 /* readme.md */; };
 		521C9E5E338A09F75769973D /* FitNotesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */; };
 		FBFBBA6C28DA73F756B0849A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6112FBD12BB8318501573925 /* Foundation.framework */; };
 /* End PBXBuildFile section */
@@ -23,6 +24,7 @@
 
 /* Begin PBXFileReference section */
 		174EE5802FC1997000F5A98D /* FitNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		178E24C42FC20275002E61F5 /* readme.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = readme.md; sourceTree = "<group>"; };
 		4BB52290350349AA122DA7B3 /* FitNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FitNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6112FBD12BB8318501573925 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FitNotesTests.swift; path = FitNotesTests/FitNotesTests.swift; sourceTree = "<group>"; };
@@ -58,6 +60,7 @@
 		174EE5772FC1997000F5A98D = {
 			isa = PBXGroup;
 			children = (
+				178E24C42FC20275002E61F5 /* readme.md */,
 				174EE5822FC1997000F5A98D /* FitNotes */,
 				174EE5812FC1997000F5A98D /* Products */,
 				CB9AB451F822EDB8B1E598B5 /* Frameworks */,
@@ -179,6 +182,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				178E24C52FC2027C002E61F5 /* readme.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

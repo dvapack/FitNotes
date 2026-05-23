@@ -18,6 +18,27 @@ struct AppShellView: View {
             }
 
             NavigationStack {
+                StatisticsView()
+            }
+            .tabItem {
+                Label("Statistics", systemImage: "chart.line.uptrend.xyaxis")
+            }
+
+            NavigationStack {
+                LibraryView()
+            }
+            .tabItem {
+                Label("Library", systemImage: "books.vertical")
+            }
+
+            NavigationStack {
+                RoutinesView()
+            }
+            .tabItem {
+                Label("Routines", systemImage: "list.clipboard")
+            }
+
+            NavigationStack {
                 ImportView()
             }
             .tabItem {

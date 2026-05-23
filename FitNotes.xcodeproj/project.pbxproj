@@ -6,8 +6,26 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		521C9E5E338A09F75769973D /* FitNotesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */; };
+		FBFBBA6C28DA73F756B0849A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6112FBD12BB8318501573925 /* Foundation.framework */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		E5BAD0B7F14538A5721350F9 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 174EE5782FC1997000F5A98D /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 174EE57F2FC1997000F5A98D;
+			remoteInfo = FitNotes;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		174EE5802FC1997000F5A98D /* FitNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BB52290350349AA122DA7B3 /* FitNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FitNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6112FBD12BB8318501573925 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FitNotesTests.swift; path = FitNotesTests/FitNotesTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -26,6 +44,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCF83572C250DD56BD74803D /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FBFBBA6C28DA73F756B0849A /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -34,6 +60,8 @@
 			children = (
 				174EE5822FC1997000F5A98D /* FitNotes */,
 				174EE5812FC1997000F5A98D /* Products */,
+				CB9AB451F822EDB8B1E598B5 /* Frameworks */,
+				CE1BD5E4D1E1639C12503430 /* FitNotesTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -41,8 +69,33 @@
 			isa = PBXGroup;
 			children = (
 				174EE5802FC1997000F5A98D /* FitNotes.app */,
+				4BB52290350349AA122DA7B3 /* FitNotesTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		CB9AB451F822EDB8B1E598B5 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				F9295D9613291FE53BE43DAD /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		CE1BD5E4D1E1639C12503430 /* FitNotesTests */ = {
+			isa = PBXGroup;
+			children = (
+				CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */,
+			);
+			name = FitNotesTests;
+			sourceTree = "<group>";
+		};
+		F9295D9613291FE53BE43DAD /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				6112FBD12BB8318501573925 /* Foundation.framework */,
+			);
+			name = iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -64,11 +117,27 @@
 				174EE5822FC1997000F5A98D /* FitNotes */,
 			);
 			name = FitNotes;
-			packageProductDependencies = (
-			);
 			productName = FitNotes;
 			productReference = 174EE5802FC1997000F5A98D /* FitNotes.app */;
 			productType = "com.apple.product-type.application";
+		};
+		F1EC3383817B55A7C4CCF210 /* FitNotesTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 214B4F40BC850581F82044A5 /* Build configuration list for PBXNativeTarget "FitNotesTests" */;
+			buildPhases = (
+				A516A894A51333DDD2E582AA /* Sources */,
+				FCF83572C250DD56BD74803D /* Frameworks */,
+				F2B6FC4B949CFD3BC4B4AF89 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				3255B7F007DC4FC9433AD936 /* PBXTargetDependency */,
+			);
+			name = FitNotesTests;
+			productName = "$(TARGET_NAME)";
+			productReference = 4BB52290350349AA122DA7B3 /* FitNotesTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -100,12 +169,20 @@
 			projectRoot = "";
 			targets = (
 				174EE57F2FC1997000F5A98D /* FitNotes */,
+				F1EC3383817B55A7C4CCF210 /* FitNotesTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		174EE57E2FC1997000F5A98D /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F2B6FC4B949CFD3BC4B4AF89 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -122,7 +199,24 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A516A894A51333DDD2E582AA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				521C9E5E338A09F75769973D /* FitNotesTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		3255B7F007DC4FC9433AD936 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = FitNotes;
+			target = 174EE57F2FC1997000F5A98D /* FitNotes */;
+			targetProxy = E5BAD0B7F14538A5721350F9 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		174EE5892FC1997000F5A98D /* Debug */ = {
@@ -310,6 +404,55 @@
 			};
 			name = Release;
 		};
+		C2CFE6EB7271CD02584CF40F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GG6YRJ3H9G;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FitNotes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FitNotes";
+			};
+			name = Debug;
+		};
+		DEB2DD41EC59A216125C6107 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = GG6YRJ3H9G;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotesTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FitNotes.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/FitNotes";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -327,6 +470,15 @@
 			buildConfigurations = (
 				174EE58C2FC1997000F5A98D /* Debug */,
 				174EE58D2FC1997000F5A98D /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		214B4F40BC850581F82044A5 /* Build configuration list for PBXNativeTarget "FitNotesTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DEB2DD41EC59A216125C6107 /* Release */,
+				C2CFE6EB7271CD02584CF40F /* Debug */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

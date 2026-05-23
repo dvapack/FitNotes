@@ -7,6 +7,13 @@ struct HomeView: View {
     private var muscleGroups: [MuscleGroup]
     @Query(
         filter: #Predicate<Workout> { workout in
+            workout.finishedAt != nil
+        },
+        sort: [SortDescriptor(\Workout.startedAt, order: .reverse)]
+    )
+    private var completedWorkouts: [Workout]
+    @Query(
+        filter: #Predicate<Workout> { workout in
             workout.finishedAt == nil
         },
         sort: [SortDescriptor(\Workout.startedAt, order: .reverse)]
@@ -30,6 +37,10 @@ struct HomeView: View {
             .reduce(0) { partialResult, exercise in
                 partialResult + exercise.workoutSets.count
             }
+    }
+
+    private var recentWorkouts: [Workout] {
+        Array(completedWorkouts.prefix(5))
     }
 
     var body: some View {
@@ -64,23 +75,26 @@ struct HomeView: View {
                 }
             }
 
-            Section("Muscle Groups") {
-                if muscleGroups.isEmpty {
+            Section("Last 5 Workouts") {
+                if recentWorkouts.isEmpty {
                     ContentUnavailableView(
-                        "No muscle groups yet",
-                        systemImage: "square.stack.3d.up.slash",
-                        description: Text("Seeded exercises will appear here after the first launch.")
+                        "No workouts yet",
+                        systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                        description: Text("Finish a workout to see your latest sessions here.")
                     )
                 } else {
-                    ForEach(muscleGroups) { group in
-                        HStack {
-                            Text(group.name)
-                            Spacer()
-                            Text("\(group.exercises.count)")
-                                .foregroundStyle(.secondary)
+                    ForEach(recentWorkouts) { workout in
+                        NavigationLink {
+                            WorkoutHistoryDetailView(workout: workout)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.headline)
+                                Text(workoutSummary(for: workout))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(group.name), \(group.exercises.count) exercises")
                     }
                 }
             }
@@ -112,6 +126,11 @@ struct HomeView: View {
         } catch {
             errorMessage = "The workout could not be created right now."
         }
+    }
+
+    private func workoutSummary(for workout: Workout) -> String {
+        let exerciseCount = Set(workout.sets.compactMap { $0.exercise?.persistentModelID }).count
+        return "\(workout.sets.count) sets across \(exerciseCount) exercises"
     }
 }
 

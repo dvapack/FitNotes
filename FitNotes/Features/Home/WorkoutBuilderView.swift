@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Combine
 
 struct WorkoutBuilderView: View {
     @Environment(\.dismiss) private var dismiss
@@ -20,13 +21,21 @@ struct WorkoutBuilderView: View {
     @State private var setCommentText = ""
     @State private var workoutComment = ""
     @State private var workoutDate = Date()
+    @State private var workoutStartedAt = Date()
+    @State private var workoutFinishedAt = Date()
     @State private var showingMuscleGroupSheet = false
     @State private var showingExerciseSheet = false
     @State private var showingDiscardConfirmation = false
     @State private var showingFinishEmptyConfirmation = false
-    @State private var showingToolsSheet = false
+    @State private var showingFinishSheet = false
     @State private var editingSet: WorkoutSet?
     @State private var alertMessage: String?
+    @State private var currentTime = Date()
+    @State private var restTimerRemainingSeconds = 0
+    @State private var restTimerTotalSeconds = 0
+    @State private var isRestTimerRunning = false
+
+    private let clock = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private var exerciseStore: DefaultExerciseStore {
         DefaultExerciseStore(context: modelContext)
@@ -95,6 +104,42 @@ struct WorkoutBuilderView: View {
         selectedExercise != nil && parsedWeight != nil && parsedReps != nil
     }
 
+    private var canReorderExerciseGroups: Bool {
+        workout.isInProgress &&
+        groupedSets.count > 1 &&
+        groupedSets.allSatisfy { $0.exercise != nil }
+    }
+
+    private var selectedExerciseDefaultRestSeconds: Int {
+        max(selectedExercise?.defaultRestSeconds ?? 0, 0)
+    }
+
+    private var shouldShowRestTimer: Bool {
+        selectedExerciseDefaultRestSeconds > 0 || restTimerRemainingSeconds > 0 || restTimerTotalSeconds > 0
+    }
+
+    private var currentWorkoutDuration: TimeInterval {
+        max(currentTime.timeIntervalSince(resolvedStartedAt), 0)
+    }
+
+    private var pendingFinishDuration: TimeInterval {
+        max(workoutFinishedAt.timeIntervalSince(resolvedStartedAt), 0)
+    }
+
+    private var restTimerProgress: Double {
+        guard restTimerTotalSeconds > 0 else { return 0 }
+        let elapsedSeconds = restTimerTotalSeconds - restTimerRemainingSeconds
+        return Double(elapsedSeconds) / Double(restTimerTotalSeconds)
+    }
+
+    private var restTimerStatusText: String {
+        if restTimerRemainingSeconds == 0 {
+            return "Ready"
+        }
+
+        return isRestTimerRunning ? "Resting" : "Paused"
+    }
+
     private var parsedWeight: Double? {
         Double(weightText.replacingOccurrences(of: ",", with: "."))
     }
@@ -106,37 +151,52 @@ struct WorkoutBuilderView: View {
     var body: some View {
         List {
             Section("Workout") {
-                DatePicker("Workout Date", selection: $workoutDate, displayedComponents: [.date, .hourAndMinute])
+                DatePicker("Workout Day", selection: $workoutDate, displayedComponents: .date)
 
-                LabeledContent("Started") {
-                    Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
-                }
+                DatePicker("Start Time", selection: $workoutStartedAt, displayedComponents: .hourAndMinute)
 
                 LabeledContent("Status") {
                     Text(workout.isInProgress ? "In Progress" : "Finished")
                 }
 
+                LabeledContent("Elapsed") {
+                    Text(formatDuration(currentWorkoutDuration))
+                }
+
                 TextField("Workout comment", text: $workoutComment, axis: .vertical)
                     .lineLimit(2...4)
+                    .focused($focusedField, equals: .workoutComment)
 
                 Button("Save Workout Details") {
                     persistWorkoutMetadata()
                 }
             }
 
-            Section("Select Muscle Group") {
+            Section("Exercise Setup") {
                 if muscleGroups.isEmpty {
                     ContentUnavailableView(
                         "No muscle groups available",
                         systemImage: "square.stack.3d.up.slash",
                         description: Text("Create your first custom muscle group to start adding exercises.")
                     )
-                } else {
-                    if let currentMuscleGroupID = currentMuscleGroupPersistentID {
-                        Picker("Muscle Group", selection: muscleGroupSelection(fallbackID: currentMuscleGroupID)) {
-                            ForEach(muscleGroups) { group in
-                                Text(group.name).tag(group.persistentModelID)
-                            }
+                } else if let currentMuscleGroupID = currentMuscleGroupPersistentID {
+                    Picker("Muscle Group", selection: muscleGroupSelection(fallbackID: currentMuscleGroupID)) {
+                        ForEach(muscleGroups, id: \.persistentModelID) { group in
+                            Text(group.name).tag(group.persistentModelID)
+                        }
+                    }
+                }
+
+                if exercises.isEmpty {
+                    ContentUnavailableView(
+                        "No exercises in this muscle group",
+                        systemImage: "dumbbell",
+                        description: Text("Create the first custom exercise for this muscle group.")
+                    )
+                } else if let currentExerciseID = currentExercisePersistentID {
+                    Picker("Exercise", selection: exerciseSelection(fallbackID: currentExerciseID)) {
+                        ForEach(exercises, id: \.persistentModelID) { exercise in
+                            Text(exercise.name).tag(exercise.persistentModelID)
                         }
                     }
                 }
@@ -144,56 +204,19 @@ struct WorkoutBuilderView: View {
                 Button("Add Custom Muscle Group") {
                     showingMuscleGroupSheet = true
                 }
-            }
-
-            Section("Select Exercise") {
-                if exercises.isEmpty {
-                    ContentUnavailableView(
-                        "No exercises in this muscle group",
-                        systemImage: "dumbbell",
-                        description: Text("Create the first custom exercise for this muscle group.")
-                    )
-                } else {
-                    if let currentExerciseID = currentExercisePersistentID {
-                        Picker("Exercise", selection: exerciseSelection(fallbackID: currentExerciseID)) {
-                            ForEach(exercises) { exercise in
-                                Text(exercise.name).tag(exercise.persistentModelID)
-                            }
-                        }
-                    }
-                }
 
                 Button("Add Custom Exercise") {
                     showingExerciseSheet = true
                 }
             }
 
+            restTimerSection
             addSetSection
-
             currentExerciseSection
-
-            Section("Workout Summary") {
-                if groupedSets.isEmpty {
-                    ContentUnavailableView(
-                        "Workout is empty",
-                        systemImage: "figure.strengthtraining.traditional",
-                        description: Text("Add at least one set to see the workout summary.")
-                    )
-                } else {
-                    ForEach(groupedSets) { group in
-                        WorkoutExerciseSummaryView(group: group)
-                    }
-
-                    ShareLink(
-                        item: workoutShareText,
-                        preview: SharePreview("Workout Summary", image: Image(systemName: "square.and.arrow.up"))
-                    ) {
-                        Label("Share Workout", systemImage: "square.and.arrow.up")
-                    }
-                }
-            }
+            workoutSummarySection
         }
         .navigationTitle("Workout")
+        .scrollDismissesKeyboard(.immediately)
         .toolbar {
             if workout.isInProgress {
                 ToolbarItem(placement: .topBarLeading) {
@@ -208,11 +231,9 @@ struct WorkoutBuilderView: View {
                     }
                 }
 
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showingToolsSheet = true
-                    } label: {
-                        Image(systemName: "hammer")
+                if canReorderExerciseGroups {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        EditButton()
                     }
                 }
             }
@@ -230,22 +251,57 @@ struct WorkoutBuilderView: View {
                 createMuscleGroup(named: name)
             }
         }
-        .sheet(isPresented: $showingToolsSheet) {
-            WorkoutToolsSheet(weightText: $weightText, repsText: $repsText)
+        .sheet(isPresented: $showingFinishSheet) {
+            FinishWorkoutSheet(
+                startedAt: resolvedStartedAt,
+                finishedAt: $workoutFinishedAt,
+                durationText: formatDuration(pendingFinishDuration),
+                onFinish: finishWorkout
+            )
         }
         .sheet(item: $editingSet) { workoutSet in
             SetEditorSheet(set: workoutSet)
         }
         .onAppear {
             workoutDate = workout.date
+            workoutStartedAt = workout.startedAt
+            let now = Date()
+            currentTime = now
+            workoutFinishedAt = max(now, workout.startedAt)
             workoutComment = workout.comment
             syncSelections()
+            syncRestTimerForExerciseChange()
         }
         .onChange(of: muscleGroups.map(\.persistentModelID)) { _, _ in
             syncSelections()
         }
         .onChange(of: exercises.map(\.persistentModelID)) { _, _ in
             syncSelections()
+            syncRestTimerForExerciseChange()
+        }
+        .onChange(of: selectedExerciseID) { _, _ in
+            syncRestTimerForExerciseChange()
+        }
+        .onChange(of: workoutDate) { _, _ in
+            if workoutFinishedAt < resolvedStartedAt {
+                workoutFinishedAt = resolvedStartedAt
+            }
+        }
+        .onChange(of: workoutStartedAt) { _, _ in
+            if workoutFinishedAt < resolvedStartedAt {
+                workoutFinishedAt = resolvedStartedAt
+            }
+        }
+        .onReceive(clock) { tick in
+            currentTime = tick
+            guard isRestTimerRunning, restTimerRemainingSeconds > 0 else {
+                return
+            }
+
+            restTimerRemainingSeconds -= 1
+            if restTimerRemainingSeconds == 0 {
+                isRestTimerRunning = false
+            }
         }
         .alert("Workout Update", isPresented: Binding(
             get: { alertMessage != nil },
@@ -277,7 +333,7 @@ struct WorkoutBuilderView: View {
             titleVisibility: .visible
         ) {
             Button("Finish Anyway") {
-                finishWorkout()
+                presentFinishSheet()
             }
             Button("Keep Editing", role: .cancel) {}
         } message: {
@@ -285,9 +341,13 @@ struct WorkoutBuilderView: View {
         }
         .onSubmit {
             switch focusedField {
+            case .workoutComment:
+                persistWorkoutMetadata()
             case .weight:
                 focusedField = .reps
             case .reps:
+                focusedField = .setComment
+            case .setComment:
                 saveSet()
             case .none:
                 break
@@ -322,6 +382,168 @@ struct WorkoutBuilderView: View {
 
         if selectedExerciseID == nil || !exercises.contains(where: { $0.persistentModelID == selectedExerciseID }) {
             selectedExerciseID = exercises.first?.persistentModelID
+        }
+    }
+
+    private var resolvedStartedAt: Date {
+        let calendar = Calendar.current
+        let workoutDay = calendar.dateComponents([.year, .month, .day], from: workoutDate)
+        let startTime = calendar.dateComponents([.hour, .minute, .second], from: workoutStartedAt)
+        var components = DateComponents()
+        components.year = workoutDay.year
+        components.month = workoutDay.month
+        components.day = workoutDay.day
+        components.hour = startTime.hour
+        components.minute = startTime.minute
+        components.second = startTime.second
+        return calendar.date(from: components) ?? workoutStartedAt
+    }
+
+    private func formatDuration(_ interval: TimeInterval) -> String {
+        let totalSeconds = max(Int(interval.rounded()), 0)
+        let hours = totalSeconds / 3_600
+        let minutes = (totalSeconds % 3_600) / 60
+        let seconds = totalSeconds % 60
+
+        if hours > 0 {
+            return String(format: "%dh %02dm %02ds", hours, minutes, seconds)
+        }
+
+        return String(format: "%dm %02ds", minutes, seconds)
+    }
+
+    private func formatSeconds(_ seconds: Int) -> String {
+        let clampedSeconds = max(seconds, 0)
+        let minutes = clampedSeconds / 60
+        let remainingSeconds = clampedSeconds % 60
+        return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
+
+    private func presentFinishSheet() {
+        let startedAt = resolvedStartedAt
+        let now = Date()
+        workoutFinishedAt = max(now, startedAt)
+        showingFinishSheet = true
+    }
+
+    private func startRestTimer() {
+        guard selectedExerciseDefaultRestSeconds > 0 else {
+            return
+        }
+
+        restTimerTotalSeconds = selectedExerciseDefaultRestSeconds
+        restTimerRemainingSeconds = selectedExerciseDefaultRestSeconds
+        isRestTimerRunning = true
+    }
+
+    private func pauseRestTimer() {
+        isRestTimerRunning = false
+    }
+
+    private func resumeRestTimer() {
+        guard restTimerRemainingSeconds > 0 else {
+            startRestTimer()
+            return
+        }
+
+        isRestTimerRunning = true
+    }
+
+    private func clearRestTimer() {
+        isRestTimerRunning = false
+        restTimerRemainingSeconds = 0
+        restTimerTotalSeconds = selectedExerciseDefaultRestSeconds
+    }
+
+    private func syncRestTimerForExerciseChange() {
+        guard !isRestTimerRunning else {
+            return
+        }
+
+        if restTimerRemainingSeconds == 0 {
+            restTimerTotalSeconds = selectedExerciseDefaultRestSeconds
+        }
+    }
+
+    private var restTimerSection: some View {
+        Section("Rest Timer") {
+            Group {
+                if let selectedExercise {
+                    LabeledContent("Exercise") {
+                        Text(selectedExercise.name)
+                    }
+                }
+            }
+
+            LabeledContent("Default Rest") {
+                Text(selectedExerciseDefaultRestSeconds > 0 ? formatSeconds(selectedExerciseDefaultRestSeconds) : "Off")
+            }
+
+            if shouldShowRestTimer {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text(formatSeconds(restTimerRemainingSeconds))
+                            .font(.title2.monospacedDigit())
+                        Spacer()
+                        Text(restTimerStatusText)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    ProgressView(value: restTimerProgress)
+                }
+
+                if isRestTimerRunning {
+                    Button("Pause Rest Timer") {
+                        pauseRestTimer()
+                    }
+
+                    Button("Restart Rest Timer") {
+                        startRestTimer()
+                    }
+
+                    Button("Skip Rest Timer") {
+                        clearRestTimer()
+                    }
+                } else {
+                    Button(restTimerRemainingSeconds > 0 ? "Resume Rest Timer" : "Start Rest Timer") {
+                        restTimerRemainingSeconds > 0 ? resumeRestTimer() : startRestTimer()
+                    }
+                    .disabled(selectedExerciseDefaultRestSeconds == 0)
+
+                    if selectedExerciseDefaultRestSeconds > 0 {
+                        Button("Restart Rest Timer") {
+                            startRestTimer()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var workoutSummarySection: some View {
+        Section("Workout Summary") {
+            Group {
+                if groupedSets.isEmpty {
+                    ContentUnavailableView(
+                        "Workout is empty",
+                        systemImage: "figure.strengthtraining.traditional",
+                        description: Text("Add at least one set to see the workout summary.")
+                    )
+                } else {
+                    ForEach(groupedSets, id: \.id) { group in
+                        WorkoutExerciseSummaryView(group: group)
+                    }
+                    .onMove(perform: moveExerciseGroups)
+
+                    ShareLink(
+                        item: workoutShareText,
+                        preview: SharePreview("Workout Summary", image: Image(systemName: "square.and.arrow.up"))
+                    ) {
+                        Label("Share Workout", systemImage: "square.and.arrow.up")
+                    }
+                }
+            }
+            .id(SectionAnchor.summary)
         }
     }
 
@@ -363,6 +585,8 @@ struct WorkoutBuilderView: View {
     }
 
     private func saveSet() {
+        focusedField = nil
+
         guard let selectedExercise else {
             alertMessage = "Choose an exercise before saving a set."
             return
@@ -390,6 +614,7 @@ struct WorkoutBuilderView: View {
             weightText = ""
             repsText = ""
             setCommentText = ""
+            startRestTimer()
             focusedField = .weight
         } catch {
             alertMessage = "The set could not be saved."
@@ -400,20 +625,22 @@ struct WorkoutBuilderView: View {
         if allSets.isEmpty {
             showingFinishEmptyConfirmation = true
         } else {
-            finishWorkout()
+            presentFinishSheet()
         }
     }
 
     private func finishWorkout() {
         do {
+            let startedAt = resolvedStartedAt
+            let finishedAt = max(workoutFinishedAt, startedAt)
             try workoutStore.updateWorkout(
                 workout,
-                date: workoutDate,
-                startedAt: workout.startedAt,
-                finishedAt: workout.finishedAt,
+                date: startedAt,
+                startedAt: startedAt,
+                finishedAt: nil,
                 comment: workoutComment
             )
-            try workoutStore.finishWorkout(workout)
+            try workoutStore.finishWorkout(workout, finishedAt: finishedAt)
             dismiss()
         } catch {
             alertMessage = "The workout could not be finished."
@@ -449,24 +676,33 @@ struct WorkoutBuilderView: View {
         }
     }
 
-    private func copyPreviousWorkout() {
+    private func moveExerciseGroups(from offsets: IndexSet, to destination: Int) {
+        guard canReorderExerciseGroups else { return }
+
+        var reorderedGroups = groupedSets
+        reorderedGroups.move(fromOffsets: offsets, toOffset: destination)
+        let orderedExerciseIDs = reorderedGroups.compactMap { $0.exercise?.persistentModelID }
+
         do {
-            let copiedCount = try workoutStore.copyMostRecentFinishedWorkout(into: workout)
-            alertMessage = copiedCount == 0 ? "No finished workout is available to copy." : "Copied \(copiedCount) sets from the most recent finished workout."
+            try workoutStore.reorderExerciseGroups(in: workout, orderedExerciseIDs: orderedExerciseIDs)
         } catch {
-            alertMessage = "The previous workout could not be copied."
+            alertMessage = "The exercise order could not be updated."
         }
     }
 
     private func persistWorkoutMetadata() {
+        focusedField = nil
+        let startedAt = resolvedStartedAt
+
         do {
             try workoutStore.updateWorkout(
                 workout,
-                date: workoutDate,
-                startedAt: workout.startedAt,
+                date: startedAt,
+                startedAt: startedAt,
                 finishedAt: workout.finishedAt,
                 comment: workoutComment
             )
+            alertMessage = "Workout details saved."
         } catch {
             alertMessage = "The workout details could not be saved."
         }
@@ -496,31 +732,30 @@ struct WorkoutBuilderView: View {
                 .submitLabel(.done)
 
             TextField("Set comment", text: $setCommentText)
+                .focused($focusedField, equals: .setComment)
 
             Button("Save Set") {
                 saveSet()
             }
             .disabled(!canAddSet)
-
-            Button("Copy Most Recent Workout") {
-                copyPreviousWorkout()
-            }
         }
     }
 
     private var currentExerciseSection: some View {
         Section(currentExerciseSectionTitle) {
-            if currentExerciseSets.isEmpty {
-                Text("Add the first set for the selected exercise.")
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(currentExerciseSets) { workoutSet in
-                    SetRowView(set: workoutSet) {
-                        editingSet = workoutSet
+            Group {
+                if currentExerciseSets.isEmpty {
+                    Text("Add the first set for the selected exercise.")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(currentExerciseSets) { workoutSet in
+                        SetRowView(set: workoutSet) {
+                            editingSet = workoutSet
+                        }
                     }
+                    .onDelete(perform: deleteCurrentExerciseSets)
+                    .onMove(perform: moveCurrentExerciseSets)
                 }
-                .onDelete(perform: deleteCurrentExerciseSets)
-                .onMove(perform: moveCurrentExerciseSets)
             }
         }
     }
@@ -528,8 +763,14 @@ struct WorkoutBuilderView: View {
 
 private extension WorkoutBuilderView {
     enum EntryField {
+        case workoutComment
         case weight
         case reps
+        case setComment
+    }
+
+    enum SectionAnchor: Hashable {
+        case summary
     }
 }
 
@@ -615,6 +856,47 @@ private struct SetRowView: View {
         .font(.subheadline)
         .contentShape(Rectangle())
         .onTapGesture(perform: onEdit)
+    }
+}
+
+private struct FinishWorkoutSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let startedAt: Date
+    @Binding var finishedAt: Date
+    let durationText: String
+    let onFinish: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Timing") {
+                    LabeledContent("Started") {
+                        Text(startedAt.formatted(date: .abbreviated, time: .shortened))
+                    }
+
+                    DatePicker("Finish Time", selection: $finishedAt, in: startedAt..., displayedComponents: [.date, .hourAndMinute])
+
+                    LabeledContent("Duration") {
+                        Text(durationText)
+                    }
+                }
+            }
+            .navigationTitle("Finish Workout")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                }
+
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Finish") {
+                        onFinish()
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -706,6 +988,7 @@ private struct CustomExerciseSheet: View {
 private struct SetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @FocusState private var isKeyboardFocused: Bool
 
     let set: WorkoutSet
 
@@ -730,11 +1013,15 @@ private struct SetEditorSheet: View {
             Form {
                 TextField("Weight", text: $weightText)
                     .keyboardType(.decimalPad)
+                    .focused($isKeyboardFocused)
                 TextField("Reps", text: $repsText)
                     .keyboardType(.numberPad)
+                    .focused($isKeyboardFocused)
                 TextField("Comment", text: $comment, axis: .vertical)
                     .lineLimit(2...4)
+                    .focused($isKeyboardFocused)
             }
+            .scrollDismissesKeyboard(.immediately)
             .navigationTitle("Edit Set")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -767,81 +1054,6 @@ private struct SetEditorSheet: View {
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-}
-
-private struct WorkoutToolsSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @Binding var weightText: String
-    @Binding var repsText: String
-
-    @State private var targetWeightText = "100"
-    @State private var intensity = 0.75
-    private let tools = WorkoutToolsService()
-
-    private var currentWeight: Double? {
-        Double(weightText.replacingOccurrences(of: ",", with: "."))
-    }
-
-    private var currentReps: Int? {
-        Int(repsText)
-    }
-
-    private var oneRepMax: EstimatedOneRepMax? {
-        guard let currentWeight, let currentReps else { return nil }
-        return tools.estimateOneRepMax(weight: currentWeight, reps: currentReps)
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Estimated 1RM") {
-                    if let oneRepMax {
-                        LabeledContent("Recommended") {
-                            Text(oneRepMax.recommended.formatted(.number.precision(.fractionLength(0...1))) + " kg")
-                        }
-                        LabeledContent("Epley") {
-                            Text(oneRepMax.epley.formatted(.number.precision(.fractionLength(0...1))) + " kg")
-                        }
-                        LabeledContent("Brzycki") {
-                            Text(oneRepMax.brzycki.formatted(.number.precision(.fractionLength(0...1))) + " kg")
-                        }
-                    } else {
-                        Text("Enter weight and reps in the workout builder to calculate 1RM.")
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Set Calculator") {
-                    Slider(value: $intensity, in: 0.5...1.0, step: 0.025)
-                    Text("Intensity \(Int(intensity * 100))%")
-                    if let oneRepMax,
-                       let projected = tools.projectedWorkingWeight(oneRepMax: oneRepMax.recommended, intensity: intensity) {
-                        Text("Projected working weight: \(projected.formatted(.number.precision(.fractionLength(0...1)))) kg")
-                    }
-                }
-
-                Section("Plate Calculator") {
-                    TextField("Target Weight", text: $targetWeightText)
-                        .keyboardType(.decimalPad)
-                    if let targetWeight = Double(targetWeightText.replacingOccurrences(of: ",", with: ".")) {
-                        ForEach(tools.plateBreakdown(totalWeight: targetWeight)) { plate in
-                            HStack {
-                                Text("\(plate.plate.formatted(.number.precision(.fractionLength(0...2)))) kg")
-                                Spacer()
-                                Text("\(plate.count) per side")
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Workout Tools")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") { dismiss() }
-                }
-            }
         }
     }
 }

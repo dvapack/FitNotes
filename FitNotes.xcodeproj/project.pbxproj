@@ -9,7 +9,6 @@
 /* Begin PBXBuildFile section */
 		178E24C52FC2027C002E61F5 /* readme.md in Resources */ = {isa = PBXBuildFile; fileRef = 178E24C42FC20275002E61F5 /* readme.md */; };
 		521C9E5E338A09F75769973D /* FitNotesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */; };
-		FBFBBA6C28DA73F756B0849A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6112FBD12BB8318501573925 /* Foundation.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -26,7 +25,6 @@
 		174EE5802FC1997000F5A98D /* FitNotes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FitNotes.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		178E24C42FC20275002E61F5 /* readme.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = readme.md; sourceTree = "<group>"; };
 		4BB52290350349AA122DA7B3 /* FitNotesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FitNotesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		6112FBD12BB8318501573925 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = FitNotesTests.swift; path = FitNotesTests/FitNotesTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -50,7 +48,6 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				FBFBBA6C28DA73F756B0849A /* Foundation.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -63,7 +60,6 @@
 				178E24C42FC20275002E61F5 /* readme.md */,
 				174EE5822FC1997000F5A98D /* FitNotes */,
 				174EE5812FC1997000F5A98D /* Products */,
-				CB9AB451F822EDB8B1E598B5 /* Frameworks */,
 				CE1BD5E4D1E1639C12503430 /* FitNotesTests */,
 			);
 			sourceTree = "<group>";
@@ -77,28 +73,12 @@
 			name = Products;
 			sourceTree = "<group>";
 		};
-		CB9AB451F822EDB8B1E598B5 /* Frameworks */ = {
-			isa = PBXGroup;
-			children = (
-				F9295D9613291FE53BE43DAD /* iOS */,
-			);
-			name = Frameworks;
-			sourceTree = "<group>";
-		};
 		CE1BD5E4D1E1639C12503430 /* FitNotesTests */ = {
 			isa = PBXGroup;
 			children = (
 				CBE86CD6E122A0005AAA7CE3 /* FitNotesTests.swift */,
 			);
 			name = FitNotesTests;
-			sourceTree = "<group>";
-		};
-		F9295D9613291FE53BE43DAD /* iOS */ = {
-			isa = PBXGroup;
-			children = (
-				6112FBD12BB8318501573925 /* Foundation.framework */,
-			);
-			name = iOS;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -281,7 +261,6 @@
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
-				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -338,7 +317,6 @@
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
-				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -367,6 +345,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -399,6 +378,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotes;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -424,7 +404,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -448,7 +428,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.flowersinvase.FitNotesTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

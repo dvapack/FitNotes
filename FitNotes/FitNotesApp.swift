@@ -3,22 +3,26 @@ import SwiftData
 
 @main
 struct FitNotesApp: App {
-    private let sharedModelContainer: ModelContainer = {
-        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
-            return ModelContainerFactory.makeInMemoryContainer()
-        }
-
-        return ModelContainerFactory.makeSharedContainer()
-    }()
+    @StateObject private var appState = AppBootstrap()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .task {
-                    let seeder = SeedDataService(context: sharedModelContainer.mainContext)
-                    try? seeder.seedIfNeeded()
-                }
+            rootView
         }
-        .modelContainer(sharedModelContainer)
+    }
+
+    @ViewBuilder
+    private var rootView: some View {
+        switch appState.state {
+        case let .ready(container):
+            ContentView()
+                .modelContainer(container)
+        case let .failed(error):
+            PersistenceRecoveryView(
+                error: error,
+                onRetry: appState.reload,
+                onReset: appState.resetStoreAndReload
+            )
+        }
     }
 }

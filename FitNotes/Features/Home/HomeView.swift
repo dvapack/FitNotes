@@ -28,7 +28,7 @@ struct HomeView: View {
     }
 
     private var completedWorkoutCount: Int {
-        (try? workoutStore.fetchWorkoutHistory().count) ?? 0
+        completedWorkouts.count
     }
 
     private var totalTrackedSets: Int {
@@ -93,6 +93,12 @@ struct HomeView: View {
                                 Text(workoutSummary(for: workout))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
+                                if !workout.comment.isEmpty {
+                                    Text(workout.comment)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
                             }
                         }
                     }
@@ -139,8 +145,7 @@ private struct WorkoutDraftDestinationView: View {
     let workoutID: PersistentIdentifier
 
     var body: some View {
-        let workoutStore = DefaultWorkoutStore(context: modelContext)
-        if let workout = try? workoutStore.fetchWorkout(id: workoutID) {
+        if let workout = modelContext.model(for: workoutID) as? Workout {
             WorkoutBuilderView(workout: workout)
         } else {
             ContentUnavailableView("Workout not found", systemImage: "exclamationmark.circle")

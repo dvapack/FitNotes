@@ -171,6 +171,7 @@ struct FitNotesCSVImporter {
                 setOrder: nextSetOrder,
                 weight: row.weight,
                 reps: row.reps,
+                isCompleted: true,
                 exerciseNameSnapshot: exercise.name,
                 muscleGroupNameSnapshot: muscleGroup.name,
                 workout: workout,

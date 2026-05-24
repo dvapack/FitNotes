@@ -5,7 +5,6 @@ enum WorkoutStoreError: LocalizedError, Equatable {
     case invalidWeight
     case invalidReps
     case workoutAlreadyFinished
-    case routineHasNoExercises
 
     var errorDescription: String? {
         switch self {
@@ -15,8 +14,6 @@ enum WorkoutStoreError: LocalizedError, Equatable {
             return "Reps must be greater than zero."
         case .workoutAlreadyFinished:
             return "Finished workouts can no longer be edited."
-        case .routineHasNoExercises:
-            return "Add exercises to the routine before starting it."
         }
     }
 }
@@ -26,7 +23,6 @@ protocol WorkoutStore {
     func fetchActiveDraftWorkout() throws -> Workout?
     func finishWorkout(_ workout: Workout, finishedAt: Date?) throws
     func updateWorkout(_ workout: Workout, date: Date, startedAt: Date, finishedAt: Date?, comment: String) throws
-    func copyMostRecentFinishedWorkout(into workout: Workout) throws -> Int
     func deleteWorkout(_ workout: Workout) throws
     func deleteSet(_ workoutSet: WorkoutSet) throws
     func updateSet(_ workoutSet: WorkoutSet, weight: Double, reps: Int, comment: String, isCompleted: Bool) throws
@@ -84,39 +80,31 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func updateWorkout(_ workout: Workout, date: Date, startedAt: Date, finishedAt: Date?, comment: String) throws {
-        workout.date = date
-        workout.startedAt = startedAt
-        workout.finishedAt = finishedAt
+        let normalizedFinishedAt: Date?
+        let normalizedStartedAt: Date
+
+        if let finishedAt, startedAt > finishedAt {
+            normalizedFinishedAt = finishedAt
+            normalizedStartedAt = finishedAt
+        } else {
+            normalizedFinishedAt = finishedAt
+            normalizedStartedAt = startedAt
+        }
+
+        let normalizedDate: Date
+        if date > normalizedStartedAt {
+            normalizedDate = normalizedStartedAt
+        } else if let normalizedFinishedAt, date > normalizedFinishedAt {
+            normalizedDate = normalizedFinishedAt
+        } else {
+            normalizedDate = date
+        }
+
+        workout.date = normalizedDate
+        workout.startedAt = normalizedStartedAt
+        workout.finishedAt = normalizedFinishedAt
         workout.comment = comment.trimmingCharacters(in: .whitespacesAndNewlines)
         try context.save()
-    }
-
-    func copyMostRecentFinishedWorkout(into workout: Workout) throws -> Int {
-        let history = try fetchWorkoutHistory()
-        guard let previousWorkout = history.first else {
-            return 0
-        }
-
-        let groupedSets = previousWorkout.sets.groupedByExercise()
-        var copiedCount = 0
-
-        for group in groupedSets {
-            guard let exercise = group.exercise else { continue }
-
-            for set in group.sets {
-                _ = try addSet(
-                    to: workout,
-                    exercise: exercise,
-                    weight: set.weight,
-                    reps: set.reps,
-                    comment: set.comment,
-                    isCompleted: true
-                )
-                copiedCount += 1
-            }
-        }
-
-        return copiedCount
     }
 
     func deleteWorkout(_ workout: Workout) throws {

@@ -23,6 +23,16 @@ struct WorkoutHistoryDetailView: View {
                 LabeledContent("Total Sets") {
                     Text("\(workout.sets.count)")
                 }
+
+                if !workout.comment.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Comment")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        Text(workout.comment)
+                    }
+                    .padding(.top, 4)
+                }
             }
 
             Section("Exercises") {

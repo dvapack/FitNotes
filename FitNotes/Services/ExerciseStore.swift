@@ -5,6 +5,8 @@ enum ExerciseStoreError: LocalizedError, Equatable {
     case emptyExerciseName
     case emptyMuscleGroupName
     case invalidRestTimer
+    case duplicateMuscleGroup
+    case duplicateExercise
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +16,10 @@ enum ExerciseStoreError: LocalizedError, Equatable {
             return "Muscle group names must not be empty."
         case .invalidRestTimer:
             return "Default rest time must be zero or greater."
+        case .duplicateMuscleGroup:
+            return "A muscle group with that name already exists."
+        case .duplicateExercise:
+            return "An exercise with that name already exists in this muscle group."
         }
     }
 }
@@ -74,7 +80,7 @@ struct DefaultExerciseStore: ExerciseStore {
             },
             sortBy: [SortDescriptor(\.name)]
         )
-        return try sortedExercises(try context.fetch(descriptor))
+        return sortedExercises(try context.fetch(descriptor))
     }
 
     func searchExercises(query: String, favoritesOnly: Bool = false) throws -> [Exercise] {
@@ -123,6 +129,15 @@ struct DefaultExerciseStore: ExerciseStore {
         let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedName.isEmpty else {
             throw ExerciseStoreError.emptyMuscleGroupName
+        }
+
+        let normalizedName = trimmedName.normalizedCatalogName
+        let existingGroups = try fetchMuscleGroups()
+        if existingGroups.contains(where: {
+            $0.persistentModelID != muscleGroup.persistentModelID &&
+            $0.name.normalizedCatalogName == normalizedName
+        }) {
+            throw ExerciseStoreError.duplicateMuscleGroup
         }
 
         muscleGroup.name = trimmedName
@@ -215,8 +230,20 @@ struct DefaultExerciseStore: ExerciseStore {
             throw ExerciseStoreError.invalidRestTimer
         }
 
+        let normalizedName = trimmedName.normalizedCatalogName
+        let groupID = muscleGroup.persistentModelID
+        let descriptor = FetchDescriptor<Exercise>(
+            predicate: #Predicate<Exercise> { candidate in
+                candidate.normalizedName == normalizedName &&
+                candidate.muscleGroup?.persistentModelID == groupID
+            }
+        )
+        if try context.fetch(descriptor).contains(where: { $0.persistentModelID != exercise.persistentModelID }) {
+            throw ExerciseStoreError.duplicateExercise
+        }
+
         exercise.name = trimmedName
-        exercise.normalizedName = trimmedName.normalizedCatalogName
+        exercise.normalizedName = normalizedName
         exercise.muscleGroup = muscleGroup
         exercise.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         exercise.isFavorite = isFavorite

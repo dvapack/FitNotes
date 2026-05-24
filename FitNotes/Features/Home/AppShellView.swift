@@ -32,13 +32,6 @@ struct AppShellView: View {
             }
 
             NavigationStack {
-                RoutinesView()
-            }
-            .tabItem {
-                Label("Routines", systemImage: "list.clipboard")
-            }
-
-            NavigationStack {
                 ImportView()
             }
             .tabItem {

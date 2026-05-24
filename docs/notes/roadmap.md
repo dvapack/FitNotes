@@ -1,42 +1,40 @@
 # FitNotes Roadmap
 
 ## Current Baseline
-- The app now ships a local SwiftData workout tracker with Home, History, Statistics, Library, Routines, and Import tabs.
+- The app now ships a local SwiftData workout tracker with Home, History, Statistics, Library, and Import tabs.
 - Workout logging supports one active draft workout, workout comments/date editing, set comments, set editing, set reordering, copy-from-last-workout, and workout sharing.
-- The exercise library supports category colors, favorites, notes, rest defaults, exercise type metadata, search, and edit/delete flows.
-- Routine templates can be created and started into the current draft workout.
-- Workout tools now include estimated 1RM, set calculator, and plate calculator logic.
+- The exercise library supports muscle group colors, favorites, notes, rest defaults, exercise type metadata, search, and add/edit/delete flows for muscle groups and exercises.
 - Tests currently cover the main service layer and pass on the `iPhone 17` simulator.
 
 ## Remaining Work Overview
 - The app has the first adaptation slice implemented, but several roadmap areas are still incomplete.
 - The highest remaining risk is production data migration for older on-device stores after schema expansion.
-- The next phases focus on stabilizing migration, deepening workout/routine UX, then adding advanced insights, calendar, settings, and portability.
+- The next phases focus on stabilizing migration, deepening workout UX, then adding advanced insights, calendar, settings, and portability.
 
 ## Phase 5: Migration Safety and Data Compatibility
-- Add a real schema migration path for older persisted stores instead of relying on test-only in-memory fallback behavior.
-- Decide how newly added required attributes should be backfilled for older `Exercise`, `Workout`, and `WorkoutSet` rows.
-- Add migration-focused tests that exercise opening older store snapshots under the new schema.
-- Review the shared store reset/recovery behavior and replace destructive fallback with explicit migration or user-facing recovery.
+- Introduce a versioned schema baseline and attach an explicit migration plan for future releases.
+- Repair older or partially populated rows in-place so richer `Exercise`, `Workout`, and `WorkoutSet` metadata has stable persisted defaults.
+- Cover migration and recovery behavior with regression tests, including the explicit pre-versioned-store recovery path.
+- Preserve existing store files on load failure and surface user-facing recovery instead of destructive automatic reset.
 - Audit CSV import and seeded catalog creation against the richer exercise metadata model.
 
 Exit criteria:
-- Existing on-device data opens successfully after upgrading to the richer schema.
-- Migration behavior is covered by automated tests.
+- Versioned stores from this release forward have an explicit migration baseline.
+- Legacy unversioned stores are preserved and handled with explicit user-facing recovery instead of silent data loss.
+- Backfill, import, seeding, and recovery behavior are covered by automated tests.
 - No production path silently deletes the main store to recover from schema mismatch.
 
 ## Phase 6: Workout Flow Depth and Navigation Polish
 - Rework the workout builder into a more focused training-session UX with clearer exercise-level navigation.
 - Add in-workout exercise reordering UI on top of the new `exerciseOrder` model support.
 - Improve set editing ergonomics, including inline editing and copy previous values.
-- Add a visible rest timer experience instead of only tool calculations.
+- Add a visible rest timer experience directly in the workout flow.
 - Add workout duration display and editable finish time behavior.
-- Improve routine-start UX so users can choose between replacing, merging into, or creating a fresh draft workout.
 
 Exit criteria:
 - Exercise order can be changed visually during a workout.
 - The active workout screen feels training-centric rather than form-centric.
-- Routines and copied workouts fit naturally into the draft workflow.
+- Copied workouts and normal logging fit naturally into the draft workflow.
 
 ## Phase 7: Exercise Insights and Goals
 - Expand the current statistics tab into richer exercise overview flows.
@@ -73,7 +71,7 @@ Exit criteria:
 - Add full-app export and restore.
 - Add spreadsheet-friendly export for workouts and history.
 - Add destructive reset flows with confirmation and clear copy.
-- Define what routines, settings, and future goals/calendar data look like in export payloads.
+- Define what settings and future goals/calendar data look like in export payloads.
 
 Exit criteria:
 - A user can export and restore the full app state locally.

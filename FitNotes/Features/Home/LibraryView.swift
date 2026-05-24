@@ -9,8 +9,10 @@ struct LibraryView: View {
     @State private var searchText = ""
     @State private var favoritesOnly = false
     @State private var showingMuscleGroupSheet = false
-    @State private var editingMuscleGroup: MuscleGroup?
-    @State private var editingExercise: Exercise?
+    @State private var muscleGroupToEdit: MuscleGroup?
+    @State private var muscleGroupToAddExercise: MuscleGroup?
+    @State private var exerciseToEdit: Exercise?
+    @State private var muscleGroupPendingDeletion: MuscleGroup?
     @State private var exercisePendingDeletion: Exercise?
     @State private var alertMessage: String?
 
@@ -18,22 +20,21 @@ struct LibraryView: View {
         DefaultExerciseStore(context: modelContext)
     }
 
+    private var trimmedSearchText: String {
+        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var isReorderingEnabled: Bool {
+        trimmedSearchText.isEmpty && !favoritesOnly
+    }
+
     private var filteredGroups: [MuscleGroup] {
-        let trimmedQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedQuery.isEmpty || favoritesOnly else {
+        guard !trimmedSearchText.isEmpty || favoritesOnly else {
             return muscleGroups
         }
 
-        return muscleGroups.compactMap { group in
-            let exercises = group.exercises.filter { exercise in
-                let matchesQuery = trimmedQuery.isEmpty ||
-                    exercise.name.localizedCaseInsensitiveContains(trimmedQuery) ||
-                    group.name.localizedCaseInsensitiveContains(trimmedQuery)
-                let matchesFavorite = !favoritesOnly || exercise.isFavorite
-                return matchesQuery && matchesFavorite
-            }
-
-            return exercises.isEmpty ? nil : group
+        return muscleGroups.filter { group in
+            filteredExercises(in: group).isEmpty == false
         }
     }
 
@@ -43,90 +44,48 @@ struct LibraryView: View {
                 Toggle("Favorites Only", isOn: $favoritesOnly)
             }
 
-            ForEach(filteredGroups) { group in
-                Section {
-                    ForEach(group.exercises
-                        .filter { exercise in
-                            let matchesQuery = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                                exercise.name.localizedCaseInsensitiveContains(searchText) ||
-                                group.name.localizedCaseInsensitiveContains(searchText)
-                            let matchesFavorite = !favoritesOnly || exercise.isFavorite
-                            return matchesQuery && matchesFavorite
-                        }
-                        .sorted {
-                            if $0.isFavorite == $1.isFavorite {
-                                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
-                            }
-
-                            return $0.isFavorite && !$1.isFavorite
-                        }
-                    ) { exercise in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack {
-                                Text(exercise.name)
-                                    .font(.headline)
-                                if exercise.isFavorite {
-                                    Image(systemName: "star.fill")
-                                        .foregroundStyle(.yellow)
-                                }
-                                Spacer()
-                                Text(exercise.exerciseType.title)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            if !exercise.notes.isEmpty {
-                                Text(exercise.notes)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Text("Rest \(exercise.defaultRestSeconds)s • \(exercise.preferredWeightUnit.title)")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                        .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                            Button {
-                                toggleFavorite(exercise)
-                            } label: {
-                                Label(exercise.isFavorite ? "Unfavorite" : "Favorite", systemImage: exercise.isFavorite ? "star.slash" : "star")
-                            }
-                            .tint(.yellow)
-                        }
-                        .swipeActions {
-                            Button("Edit") {
-                                editingExercise = exercise
-                            }
-                            .tint(.blue)
-
-                            Button("Delete", role: .destructive) {
-                                exercisePendingDeletion = exercise
-                            }
-                        }
-                    }
-                } header: {
-                    HStack {
-                        Text(group.name)
-                        Spacer()
-                        Circle()
-                            .fill(Color(hex: group.colorHex ?? "#4F7A28"))
-                            .frame(width: 10, height: 10)
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editingMuscleGroup = group
-                    }
+            if filteredGroups.isEmpty {
+                ContentUnavailableView(
+                    trimmedSearchText.isEmpty ? "No muscle groups yet" : "No matching exercises",
+                    systemImage: "books.vertical",
+                    description: Text(trimmedSearchText.isEmpty ? "Add a muscle group to start building your library." : "Try a different search or add a new exercise.")
+                )
+            } else if isReorderingEnabled {
+                ForEach(muscleGroups) { group in
+                    muscleGroupSection(for: group)
+                }
+                .onMove(perform: moveMuscleGroups)
+            } else {
+                ForEach(filteredGroups) { group in
+                    muscleGroupSection(for: group)
                 }
             }
         }
         .navigationTitle("Library")
-        .searchable(text: $searchText, prompt: "Search exercises or categories")
+        .searchable(text: $searchText, prompt: "Search exercises or muscle groups")
         .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                if muscleGroups.count > 1 && isReorderingEnabled {
+                    EditButton()
+                }
+            }
+
             ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showingMuscleGroupSheet = true
+                Menu {
+                    Button {
+                        showingMuscleGroupSheet = true
+                    } label: {
+                        Label("Add Muscle Group", systemImage: "square.stack.3d.up.fill")
+                    }
+
+                    Button {
+                        muscleGroupToAddExercise = muscleGroups.first
+                    } label: {
+                        Label("Add Exercise", systemImage: "dumbbell.fill")
+                    }
+                    .disabled(muscleGroups.isEmpty)
                 } label: {
-                    Label("Add Category", systemImage: "plus")
+                    Label("Add", systemImage: "plus")
                 }
             }
         }
@@ -142,7 +101,7 @@ struct LibraryView: View {
                 }
             }
         }
-        .sheet(item: $editingMuscleGroup) { group in
+        .sheet(item: $muscleGroupToEdit) { group in
             MuscleGroupEditorSheet(existingGroup: group) { name, colorHex in
                 do {
                     try exerciseStore.updateMuscleGroup(group, name: name, colorHex: colorHex)
@@ -153,8 +112,32 @@ struct LibraryView: View {
                 }
             }
         }
-        .sheet(item: $editingExercise) { exercise in
+        .sheet(item: $muscleGroupToAddExercise) { group in
+            ExerciseEditorSheet(initialMuscleGroup: group)
+        }
+        .sheet(item: $exerciseToEdit) { exercise in
             ExerciseEditorSheet(exercise: exercise)
+        }
+        .alert("Delete Muscle Group?", isPresented: Binding(
+            get: { muscleGroupPendingDeletion != nil },
+            set: { isPresented in
+                if !isPresented {
+                    muscleGroupPendingDeletion = nil
+                }
+            }
+        )) {
+            Button("Delete", role: .destructive) {
+                guard let muscleGroupPendingDeletion else { return }
+                do {
+                    try exerciseStore.deleteMuscleGroup(muscleGroupPendingDeletion)
+                } catch {
+                    alertMessage = error.localizedDescription
+                }
+                self.muscleGroupPendingDeletion = nil
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Deleting a muscle group also removes its exercises from the library. Historical workout sets keep their saved snapshots.")
         }
         .alert("Delete Exercise?", isPresented: Binding(
             get: { exercisePendingDeletion != nil },
@@ -165,14 +148,13 @@ struct LibraryView: View {
             }
         )) {
             Button("Delete", role: .destructive) {
-                if let exercisePendingDeletion {
-                    do {
-                        try exerciseStore.deleteExercise(exercisePendingDeletion)
-                    } catch {
-                        alertMessage = error.localizedDescription
-                    }
-                    self.exercisePendingDeletion = nil
+                guard let exercisePendingDeletion else { return }
+                do {
+                    try exerciseStore.deleteExercise(exercisePendingDeletion)
+                } catch {
+                    alertMessage = error.localizedDescription
                 }
+                self.exercisePendingDeletion = nil
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -180,7 +162,11 @@ struct LibraryView: View {
         }
         .alert("Library Update", isPresented: Binding(
             get: { alertMessage != nil },
-            set: { if !$0 { alertMessage = nil } }
+            set: { isPresented in
+                if !isPresented {
+                    alertMessage = nil
+                }
+            }
         )) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -188,11 +174,165 @@ struct LibraryView: View {
         }
     }
 
+    @ViewBuilder
+    private func muscleGroupSection(for group: MuscleGroup) -> some View {
+        Section {
+            let exercises = filteredExercises(in: group)
+            if exercises.isEmpty {
+                Button {
+                    muscleGroupToAddExercise = group
+                } label: {
+                    Label("Add Exercise", systemImage: "plus")
+                }
+            } else {
+                ForEach(exercises) { exercise in
+                    ExerciseRow(
+                        exercise: exercise,
+                        onToggleFavorite: { toggleFavorite(exercise) },
+                        onEdit: { exerciseToEdit = exercise },
+                        onDelete: { exercisePendingDeletion = exercise },
+                        onAddAnother: { muscleGroupToAddExercise = group }
+                    )
+                }
+            }
+        } header: {
+            muscleGroupHeader(for: group)
+        }
+    }
+
+    @ViewBuilder
+    private func muscleGroupHeader(for group: MuscleGroup) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name)
+                Text("\(group.exercises.count) exercises")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Circle()
+                .fill(Color(hex: group.colorHex ?? "#4F7A28"))
+                .frame(width: 10, height: 10)
+
+            Menu {
+                Button {
+                    muscleGroupToAddExercise = group
+                } label: {
+                    Label("Add Exercise", systemImage: "plus")
+                }
+
+                Button {
+                    muscleGroupToEdit = group
+                } label: {
+                    Label("Edit Muscle Group", systemImage: "pencil")
+                }
+
+                Button(role: .destructive) {
+                    muscleGroupPendingDeletion = group
+                } label: {
+                    Label("Delete Muscle Group", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func filteredExercises(in group: MuscleGroup) -> [Exercise] {
+        group.exercises
+            .filter { exercise in
+                let matchesQuery = trimmedSearchText.isEmpty ||
+                    exercise.name.localizedCaseInsensitiveContains(trimmedSearchText) ||
+                    group.name.localizedCaseInsensitiveContains(trimmedSearchText)
+                let matchesFavorite = !favoritesOnly || exercise.isFavorite
+                return matchesQuery && matchesFavorite
+            }
+            .sorted {
+                if $0.isFavorite == $1.isFavorite {
+                    return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+                }
+
+                return $0.isFavorite && !$1.isFavorite
+            }
+    }
+
     private func toggleFavorite(_ exercise: Exercise) {
         do {
             try exerciseStore.toggleFavorite(exercise)
         } catch {
             alertMessage = error.localizedDescription
+        }
+    }
+
+    private func moveMuscleGroups(fromOffsets: IndexSet, toOffset: Int) {
+        do {
+            try exerciseStore.moveMuscleGroups(fromOffsets: fromOffsets, toOffset: toOffset)
+        } catch {
+            alertMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct ExerciseRow: View {
+    let exercise: Exercise
+    let onToggleFavorite: () -> Void
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    let onAddAnother: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack {
+                Text(exercise.name)
+                    .font(.headline)
+                if exercise.isFavorite {
+                    Image(systemName: "star.fill")
+                        .foregroundStyle(.yellow)
+                }
+                Spacer()
+                Text(exercise.exerciseType.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !exercise.notes.isEmpty {
+                Text(exercise.notes)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Rest \(exercise.defaultRestSeconds)s • \(exercise.preferredWeightUnit.title)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            Button(action: onToggleFavorite) {
+                Label(exercise.isFavorite ? "Unfavorite" : "Favorite", systemImage: exercise.isFavorite ? "star.slash" : "star")
+            }
+            .tint(.yellow)
+        }
+        .swipeActions {
+            Button("Edit", action: onEdit)
+                .tint(.blue)
+
+            Button("Delete", role: .destructive, action: onDelete)
+        }
+        .contextMenu {
+            Button(action: onEdit) {
+                Label("Edit Exercise", systemImage: "pencil")
+            }
+
+            Button(action: onAddAnother) {
+                Label("Add Another Exercise", systemImage: "plus")
+            }
+
+            Button(role: .destructive, action: onDelete) {
+                Label("Delete Exercise", systemImage: "trash")
+            }
         }
     }
 }
@@ -203,7 +343,7 @@ private struct ExerciseEditorSheet: View {
     @Query(sort: [SortDescriptor(\MuscleGroup.sortOrder), SortDescriptor(\MuscleGroup.name)])
     private var muscleGroups: [MuscleGroup]
 
-    let exercise: Exercise
+    let exercise: Exercise?
 
     @State private var name: String
     @State private var notes: String
@@ -227,6 +367,18 @@ private struct ExerciseEditorSheet: View {
         _selectedMuscleGroupID = State(initialValue: exercise.muscleGroup?.persistentModelID)
     }
 
+    init(initialMuscleGroup: MuscleGroup?) {
+        self.exercise = nil
+        _name = State(initialValue: "")
+        _notes = State(initialValue: "")
+        _isFavorite = State(initialValue: false)
+        _defaultRestSeconds = State(initialValue: 90)
+        _exerciseType = State(initialValue: .weightReps)
+        _preferredWeightUnit = State(initialValue: .kg)
+        _progressionView = State(initialValue: .maxWeight)
+        _selectedMuscleGroupID = State(initialValue: initialMuscleGroup?.persistentModelID)
+    }
+
     private var exerciseStore: DefaultExerciseStore {
         DefaultExerciseStore(context: modelContext)
     }
@@ -236,7 +388,7 @@ private struct ExerciseEditorSheet: View {
             Form {
                 Section("Exercise") {
                     TextField("Name", text: $name)
-                    Picker("Category", selection: $selectedMuscleGroupID) {
+                    Picker("Muscle Group", selection: $selectedMuscleGroupID) {
                         ForEach(muscleGroups) { group in
                             Text(group.name).tag(Optional(group.persistentModelID))
                         }
@@ -268,7 +420,7 @@ private struct ExerciseEditorSheet: View {
                         .lineLimit(3...6)
                 }
             }
-            .navigationTitle("Edit Exercise")
+            .navigationTitle(exercise == nil ? "New Exercise" : "Edit Exercise")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -290,22 +442,46 @@ private struct ExerciseEditorSheet: View {
 
     private func save() {
         guard let group = muscleGroups.first(where: { $0.persistentModelID == selectedMuscleGroupID }) else {
-            errorMessage = "Choose a category."
+            errorMessage = "Choose a muscle group."
             return
         }
 
         do {
-            try exerciseStore.updateExercise(
-                exercise,
-                name: name,
-                muscleGroup: group,
-                notes: notes,
-                isFavorite: isFavorite,
-                exerciseType: exerciseType,
-                preferredWeightUnit: preferredWeightUnit,
-                defaultRestSeconds: defaultRestSeconds,
-                defaultProgressionView: progressionView
-            )
+            if let exercise {
+                try exerciseStore.updateExercise(
+                    exercise,
+                    name: name,
+                    muscleGroup: group,
+                    notes: notes,
+                    isFavorite: isFavorite,
+                    exerciseType: exerciseType,
+                    preferredWeightUnit: preferredWeightUnit,
+                    defaultRestSeconds: defaultRestSeconds,
+                    defaultProgressionView: progressionView
+                )
+            } else {
+                let newExercise = try exerciseStore.createExercise(
+                    name: name,
+                    in: group,
+                    isCustom: true,
+                    notes: notes,
+                    isFavorite: isFavorite,
+                    exerciseType: exerciseType,
+                    preferredWeightUnit: preferredWeightUnit,
+                    defaultRestSeconds: defaultRestSeconds
+                )
+                try exerciseStore.updateExercise(
+                    newExercise,
+                    name: name,
+                    muscleGroup: group,
+                    notes: notes,
+                    isFavorite: isFavorite,
+                    exerciseType: exerciseType,
+                    preferredWeightUnit: preferredWeightUnit,
+                    defaultRestSeconds: defaultRestSeconds,
+                    defaultProgressionView: progressionView
+                )
+            }
             dismiss()
         } catch {
             errorMessage = error.localizedDescription
@@ -333,7 +509,7 @@ private struct MuscleGroupEditorSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Category name", text: $name)
+                TextField("Muscle group name", text: $name)
                 TextField("Color hex", text: $colorHex)
                     .textInputAutocapitalization(.never)
 
@@ -342,7 +518,7 @@ private struct MuscleGroupEditorSheet: View {
                         .foregroundStyle(.red)
                 }
             }
-            .navigationTitle(existingGroup == nil ? "New Category" : "Edit Category")
+            .navigationTitle(existingGroup == nil ? "New Muscle Group" : "Edit Muscle Group")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -357,7 +533,7 @@ private struct MuscleGroupEditorSheet: View {
     private func save() {
         validationMessage = nil
         guard onSave(name.trimmingCharacters(in: .whitespacesAndNewlines), colorHex.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            validationMessage = "The category could not be saved."
+            validationMessage = "The muscle group could not be saved."
             return
         }
         dismiss()

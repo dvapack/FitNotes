@@ -9,23 +9,20 @@
 - [x] Statistics tab with progression and personal record summaries.
 - [x] Workout builder with custom categories/exercises, validated set entry, deletion, and finish/discard flows.
 - [x] Richer workout metadata: workout comment, editable date, set comments, set editing, set reordering, copy-most-recent workout, and share text.
-- [x] Exercise library foundation: favorites, notes, category color metadata, search, edit/delete, rest defaults, type/unit metadata.
-- [x] Routine foundation: routine models, create routine, inspect routine, and start routine into a draft workout.
-- [x] Workout tools foundation: estimated 1RM, set calculator, and plate calculator.
-- [x] Regression coverage expanded to 25 tests.
+- [x] Exercise library management: favorites, notes, muscle group color metadata, search, add/edit/delete for muscle groups and exercises, rest defaults, and type/unit metadata.
+- [x] Regression coverage expanded to 27 tests.
 
 ## Phase 5 Checklist: Migration Safety and Data Compatibility
-- [ ] Add real migration coverage for older on-device stores.
-- [ ] Replace destructive recovery assumptions for production store loading.
-- [ ] Define backfill defaults for schema-expanded fields.
-- [ ] Verify richer schema compatibility with CSV import and seeding.
+- [x] Add real migration coverage for older on-device stores.
+- [x] Replace destructive recovery assumptions for production store loading.
+- [x] Define backfill defaults for schema-expanded fields.
+- [x] Verify richer schema compatibility with CSV import and seeding.
 
 ## Phase 6 Checklist: Workout Flow Depth and Navigation Polish
-- [ ] Add visible exercise reordering UI in active workouts.
-- [ ] Improve in-workout navigation and training-session layout.
-- [ ] Add visible rest timer UX.
-- [ ] Improve copy/merge behavior when starting routines into drafts.
-- [ ] Add clearer duration and finish-time editing UX.
+- [x] Add visible exercise reordering UI in active workouts.
+- [x] Improve in-workout navigation and training-session layout.
+- [x] Add visible rest timer UX.
+- [x] Add clearer duration and finish-time editing UX.
 
 ## Phase 7 Checklist: Exercise Insights and Goals
 - [ ] Add exercise overview screens.
@@ -70,6 +67,12 @@
 - 2026-05-23: Added discard and empty-finish confirmations, keyboard flow polish, overview stats, and draft deletion test coverage.
 - 2026-05-23: Switched the workout builder to reactive SwiftData queries so saved workouts, sets, muscle groups, and exercises stay visible immediately.
 - 2026-05-23: Added deletion support for saved sets during a workout and for completed workouts from History, with regression tests.
-- 2026-05-23: Added the first FitNotes adaptation slice: richer workout/exercise/set metadata, routine models and flows, workout tools, a library tab, additional tabs in the shell, and expanded regression coverage.
+- 2026-05-23: Added the first FitNotes adaptation slice: richer workout/exercise/set metadata, routine models and flows, a library tab, additional tabs in the shell, and expanded regression coverage.
 - 2026-05-23: Rebased the notes to show the new shipped baseline and split the remaining work into Phases 5-11.
 - 2026-05-23: Simplified the workout builder so saved sets are treated as completed immediately and exercise selection no longer uses an in-builder search field.
+- 2026-05-24: Removed routine templates from the app and expanded the library into full muscle group and exercise management with add, edit, and delete flows.
+- 2026-05-24: Removed workout tools from the workout builder so the logging flow stays centered on direct set entry.
+- 2026-05-24: Replaced the silent shared-store reset with an explicit recovery screen and reset action, and added regression coverage for the reset helper.
+- 2026-05-24: Added a legacy-data backfill pass at startup to persist defaults and repair ordering/snapshot fields for richer workout and exercise metadata, with regression tests.
+- 2026-05-24: Introduced a versioned SwiftData schema baseline, added migration-plan coverage, verified seeding/import defaults against the richer model, and clarified the explicit recovery path for pre-versioned stores.
+- 2026-05-24: Finished Phase 6 by adding in-workout exercise reordering, a session flow jump menu, a visible rest timer tied to exercise defaults, and editable finish-time/duration handling with regression coverage for workout time normalization.

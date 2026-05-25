@@ -13,6 +13,8 @@ struct LegacyDataBackfillService {
     func backfillIfNeeded() throws -> Int {
         var updatedRecordCount = 0
 
+        updatedRecordCount += try backfillSettings()
+        updatedRecordCount += try backfillBodyMeasurements()
         if try backfillMuscleGroups() {
             updatedRecordCount += 1
         }
@@ -27,6 +29,55 @@ struct LegacyDataBackfillService {
         return updatedRecordCount
     }
 
+    private func backfillSettings() throws -> Int {
+        let settingsStore = AppSettingsStore(context: context)
+        let settings = try settingsStore.fetchSettings()
+
+        guard let primarySettings = settings.first else {
+            context.insert(AppSettings())
+            return 1
+        }
+
+        var changedCount = 0
+
+        for duplicate in settings.dropFirst() {
+            context.delete(duplicate)
+            changedCount += 1
+        }
+
+        if AppUnitSystem(rawValue: primarySettings.unitSystemRaw) == nil {
+            primarySettings.unitSystemRaw = AppUnitSystem.kilograms.rawValue
+            changedCount += 1
+        }
+
+        if primarySettings.weightIncrement <= 0 {
+            primarySettings.weightIncrement = 2.5
+            changedCount += 1
+        }
+
+        if CalendarWeekStart(rawValue: primarySettings.calendarWeekStartRaw) == nil {
+            primarySettings.calendarWeekStartRaw = CalendarWeekStart.monday.rawValue
+            changedCount += 1
+        }
+
+        if PersonalRecordBehavior(rawValue: primarySettings.personalRecordBehaviorRaw) == nil {
+            primarySettings.personalRecordBehaviorRaw = PersonalRecordBehavior.includeEstimatedOneRepMax.rawValue
+            changedCount += 1
+        }
+
+        if SetCompletionBehavior(rawValue: primarySettings.setCompletionBehaviorRaw) == nil {
+            primarySettings.setCompletionBehaviorRaw = SetCompletionBehavior.markCompleted.rawValue
+            changedCount += 1
+        }
+
+        if NextSetBehavior(rawValue: primarySettings.nextSetBehaviorRaw) == nil {
+            primarySettings.nextSetBehaviorRaw = NextSetBehavior.repeatPreviousValues.rawValue
+            changedCount += 1
+        }
+
+        return changedCount
+    }
+
     private func backfillMuscleGroups() throws -> Bool {
         let groups = try context.fetch(FetchDescriptor<MuscleGroup>())
         var changed = false
@@ -37,6 +88,60 @@ struct LegacyDataBackfillService {
         }
 
         return changed
+    }
+
+    private func backfillBodyMeasurements() throws -> Int {
+        let metrics = try context.fetch(FetchDescriptor<BodyMeasurementMetric>())
+        var changedCount = 0
+
+        for metric in metrics {
+            var changed = false
+
+            let normalizedName = metric.name.normalizedCatalogName
+            if metric.normalizedName != normalizedName {
+                metric.normalizedName = normalizedName
+                changed = true
+            }
+
+            let trimmedUnit = metric.unitSymbol.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmedUnit.isEmpty {
+                metric.unitSymbol = "unit"
+                changed = true
+            } else if metric.unitSymbol != trimmedUnit {
+                metric.unitSymbol = trimmedUnit
+                changed = true
+            }
+
+            if let goalDirectionRaw = metric.goalDirectionRaw,
+               BodyMeasurementGoalDirection(rawValue: goalDirectionRaw) == nil {
+                metric.goalDirectionRaw = nil
+                metric.goalTargetValue = nil
+                changed = true
+            }
+
+            if let goalTargetValue = metric.goalTargetValue, goalTargetValue <= 0 {
+                metric.goalTargetValue = nil
+                metric.goalDirectionRaw = nil
+                changed = true
+            }
+
+            if metric.goalNotesRaw == nil {
+                metric.goalNotesRaw = ""
+                changed = true
+            }
+
+            if changed {
+                changedCount += 1
+            }
+        }
+
+        let entries = try context.fetch(FetchDescriptor<BodyMeasurementEntry>())
+        for entry in entries where entry.noteRaw == nil {
+            entry.noteRaw = ""
+            changedCount += 1
+        }
+
+        return changedCount
     }
 
     private func backfillExercises() throws -> Int {
@@ -74,6 +179,24 @@ struct LegacyDataBackfillService {
 
             if ExerciseProgressionView(rawValue: exercise.defaultProgressionViewRaw ?? "") == nil {
                 exercise.defaultProgressionViewRaw = ExerciseProgressionView.maxWeight.rawValue
+                changed = true
+            }
+
+            if let goalMetricRaw = exercise.goalMetricRaw,
+               ExerciseProgressionView(rawValue: goalMetricRaw) == nil {
+                exercise.goalMetricRaw = nil
+                exercise.goalTargetValue = nil
+                changed = true
+            }
+
+            if let goalTargetValue = exercise.goalTargetValue, goalTargetValue <= 0 {
+                exercise.goalTargetValue = nil
+                exercise.goalMetricRaw = nil
+                changed = true
+            }
+
+            if exercise.goalNotesRaw == nil {
+                exercise.goalNotesRaw = ""
                 changed = true
             }
 

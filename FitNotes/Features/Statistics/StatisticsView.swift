@@ -3,6 +3,11 @@ import SwiftUI
 import SwiftData
 
 struct StatisticsView: View {
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
+    @Query(sort: [SortDescriptor(\Exercise.name)])
+    private var exercises: [Exercise]
+
     @Query(
         filter: #Predicate<Workout> { workout in
             workout.finishedAt != nil
@@ -16,8 +21,12 @@ struct StatisticsView: View {
     @State private var selectedRange: StatisticsTimeRange = .last90Days
     @State private var selectedGranularity: ExerciseProgressionGranularity = .week
 
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
+    }
+
     private var statistics: WorkoutStatisticsSnapshot {
-        WorkoutStatisticsSnapshot(workouts: completedWorkouts)
+        WorkoutStatisticsSnapshot(workouts: completedWorkouts, calendar: settings.calendar())
     }
 
     private var selectedRecord: ExercisePersonalRecord? {
@@ -53,6 +62,14 @@ struct StatisticsView: View {
             range: selectedRange,
             granularity: selectedGranularity
         )
+    }
+
+    private var selectedExercise: Exercise? {
+        guard let exerciseID = selectedRecord?.exerciseID else {
+            return nil
+        }
+
+        return exercises.first(where: { $0.persistentModelID == exerciseID })
     }
 
     var body: some View {
@@ -126,6 +143,14 @@ struct StatisticsView: View {
                         .padding(.vertical, 2)
                     }
 
+                    if let selectedExercise {
+                        NavigationLink {
+                            ExerciseInsightsView(exercise: selectedExercise)
+                        } label: {
+                            Label("Open Exercise Insights", systemImage: "chart.xyaxis.line")
+                        }
+                    }
+
                     if progressionPoints.isEmpty {
                         ContentUnavailableView(
                             "No data in this range",
@@ -185,6 +210,21 @@ struct StatisticsView: View {
                         }
                     }
                 }
+
+                Section("Body Tracking") {
+                    NavigationLink {
+                        BodyTrackingView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Open Body Tracking")
+                                .font(.headline)
+                            Text("Track body measurements, chart trends, and manage optional goals.")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
             }
         }
         .navigationTitle("Statistics")
@@ -220,11 +260,11 @@ struct StatisticsView: View {
     }
 
     private func weightString(_ value: Double) -> String {
-        "\(value.formatted(.number.precision(.fractionLength(0...2)))) kg"
+        settings.formatWeight(value)
     }
 
     private func volumeString(_ value: Double) -> String {
-        value.formatted(.number.precision(.fractionLength(0...0))) + " kg·reps"
+        settings.formatVolume(value)
     }
 
     private func metricString(_ value: Double, metric: ExerciseProgressionMetric) -> String {

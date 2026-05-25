@@ -5,6 +5,8 @@ import Combine
 struct WorkoutBuilderView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
     @Query(sort: [SortDescriptor(\MuscleGroup.sortOrder), SortDescriptor(\MuscleGroup.name)])
     private var allMuscleGroups: [MuscleGroup]
     @Query(sort: [SortDescriptor(\Exercise.name)])
@@ -43,6 +45,10 @@ struct WorkoutBuilderView: View {
 
     private var workoutStore: DefaultWorkoutStore {
         DefaultWorkoutStore(context: modelContext)
+    }
+
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
     }
 
     private var muscleGroups: [MuscleGroup] {
@@ -210,7 +216,9 @@ struct WorkoutBuilderView: View {
                 }
             }
 
-            restTimerSection
+            if settings.showsRestTimer {
+                restTimerSection
+            }
             addSetSection
             currentExerciseSection
             workoutSummarySection
@@ -271,6 +279,7 @@ struct WorkoutBuilderView: View {
             workoutComment = workout.comment
             syncSelections()
             syncRestTimerForExerciseChange()
+            ScreenWakeLockController.setEnabled(settings.keepScreenAwakeDuringWorkout && workout.isInProgress)
         }
         .onChange(of: muscleGroups.map(\.persistentModelID)) { _, _ in
             syncSelections()
@@ -281,6 +290,9 @@ struct WorkoutBuilderView: View {
         }
         .onChange(of: selectedExerciseID) { _, _ in
             syncRestTimerForExerciseChange()
+        }
+        .onChange(of: settings.keepScreenAwakeDuringWorkout) { _, newValue in
+            ScreenWakeLockController.setEnabled(newValue && workout.isInProgress)
         }
         .onChange(of: workoutDate) { _, _ in
             if workoutFinishedAt < resolvedStartedAt {
@@ -302,6 +314,9 @@ struct WorkoutBuilderView: View {
             if restTimerRemainingSeconds == 0 {
                 isRestTimerRunning = false
             }
+        }
+        .onDisappear {
+            ScreenWakeLockController.setEnabled(false)
         }
         .alert("Workout Update", isPresented: Binding(
             get: { alertMessage != nil },
@@ -419,6 +434,22 @@ struct WorkoutBuilderView: View {
         return String(format: "%02d:%02d", minutes, remainingSeconds)
     }
 
+    private var weightFieldLabel: String {
+        "Weight (\(settings.unitSystem.symbol))"
+    }
+
+    private func adjustWeight(by delta: Double) {
+        let currentValue = parsedWeight ?? 0
+        let updatedValue = max(currentValue + delta, 0)
+        weightText = updatedValue == 0 ? "" : updatedValue.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    private func adjustReps(by delta: Int) {
+        let currentValue = parsedReps ?? 0
+        let updatedValue = max(currentValue + delta, 0)
+        repsText = updatedValue == 0 ? "" : "\(updatedValue)"
+    }
+
     private func presentFinishSheet() {
         let startedAt = resolvedStartedAt
         let now = Date()
@@ -531,7 +562,7 @@ struct WorkoutBuilderView: View {
                     )
                 } else {
                     ForEach(groupedSets, id: \.id) { group in
-                        WorkoutExerciseSummaryView(group: group)
+                        WorkoutExerciseSummaryView(group: group, settings: settings)
                     }
                     .onMove(perform: moveExerciseGroups)
 
@@ -592,7 +623,7 @@ struct WorkoutBuilderView: View {
             return
         }
 
-        guard let weight = parsedWeight, weight > 0 else {
+        guard let displayWeight = parsedWeight, displayWeight > 0 else {
             alertMessage = "Enter a valid weight greater than zero."
             return
         }
@@ -602,20 +633,28 @@ struct WorkoutBuilderView: View {
             return
         }
 
+        let storedWeight = settings.storedWeight(fromDisplayWeight: displayWeight)
+
         do {
             _ = try workoutStore.addSet(
                 to: workout,
                 exercise: selectedExercise,
-                weight: weight,
+                weight: storedWeight,
                 reps: reps,
                 comment: setCommentText,
-                isCompleted: true
+                isCompleted: settings.setCompletionBehavior.completesSetsByDefault
             )
-            weightText = ""
-            repsText = ""
+            if settings.nextSetBehavior == .repeatPreviousValues {
+                weightText = displayWeight.formatted(.number.precision(.fractionLength(0...2)))
+                repsText = "\(reps)"
+            } else {
+                weightText = ""
+                repsText = ""
+            }
             setCommentText = ""
-            startRestTimer()
-            focusedField = .weight
+            if settings.showsRestTimer {
+                startRestTimer()
+            }
         } catch {
             alertMessage = "The set could not be saved."
         }
@@ -713,7 +752,7 @@ struct WorkoutBuilderView: View {
         let commentLine = workout.comment.isEmpty ? nil : "Comment: \(workout.comment)"
         let lines = groupedSets.flatMap { group in
             [group.title] + group.sets.map {
-                "Set \($0.setOrder): \($0.weight.formatted(.number.precision(.fractionLength(0...2)))) kg x \($0.reps)\($0.comment.isEmpty ? "" : " (\($0.comment))")"
+                "Set \($0.setOrder): \(settings.formatWeight($0.weight)) x \($0.reps)\($0.comment.isEmpty ? "" : " (\($0.comment))")"
             }
         }
         return ([header] + (commentLine.map { [$0] } ?? []) + lines).joined(separator: "\n")
@@ -721,15 +760,41 @@ struct WorkoutBuilderView: View {
 
     private var addSetSection: some View {
         Section("Add Set") {
-            TextField("Weight", text: $weightText)
+            TextField(weightFieldLabel, text: $weightText)
                 .keyboardType(.decimalPad)
                 .focused($focusedField, equals: .weight)
                 .submitLabel(.next)
+
+            HStack {
+                Button("- \(settings.formatIncrement())") {
+                    adjustWeight(by: -settings.weightIncrement)
+                }
+
+                Spacer()
+
+                Button("+ \(settings.formatIncrement())") {
+                    adjustWeight(by: settings.weightIncrement)
+                }
+            }
+            .buttonStyle(.borderless)
 
             TextField("Reps", text: $repsText)
                 .keyboardType(.numberPad)
                 .focused($focusedField, equals: .reps)
                 .submitLabel(.done)
+
+            HStack {
+                Button("- 1") {
+                    adjustReps(by: -1)
+                }
+
+                Spacer()
+
+                Button("+ 1") {
+                    adjustReps(by: 1)
+                }
+            }
+            .buttonStyle(.borderless)
 
             TextField("Set comment", text: $setCommentText)
                 .focused($focusedField, equals: .setComment)
@@ -749,7 +814,7 @@ struct WorkoutBuilderView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(currentExerciseSets) { workoutSet in
-                        SetRowView(set: workoutSet) {
+                        SetRowView(set: workoutSet, settings: settings) {
                             editingSet = workoutSet
                         }
                     }
@@ -831,6 +896,7 @@ private struct CustomMuscleGroupSheet: View {
 
 private struct SetRowView: View {
     let set: WorkoutSet
+    let settings: AppSettingsSnapshot
     let onEdit: () -> Void
 
     var body: some View {
@@ -840,11 +906,15 @@ private struct SetRowView: View {
                     Text("Set \(set.setOrder)")
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Text("\(set.weight.formatted(.number.precision(.fractionLength(0...2)))) kg")
+                    Text(settings.formatWeight(set.weight))
                     Text("x")
                         .foregroundStyle(.secondary)
                     Text("\(set.reps)")
                 }
+
+                Text(set.isCompleted ? "Completed" : "Incomplete")
+                    .font(.caption2)
+                    .foregroundStyle(set.isCompleted ? .green : .secondary)
 
                 if !set.comment.isEmpty {
                     Text(set.comment)
@@ -902,6 +972,7 @@ private struct FinishWorkoutSheet: View {
 
 private struct WorkoutExerciseSummaryView: View {
     let group: WorkoutExerciseGroup
+    let settings: AppSettingsSnapshot
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -912,7 +983,7 @@ private struct WorkoutExerciseSummaryView: View {
                 .foregroundStyle(.secondary)
 
             ForEach(group.sets) { workoutSet in
-                SetRowView(set: workoutSet, onEdit: {})
+                SetRowView(set: workoutSet, settings: settings, onEdit: {})
             }
         }
         .padding(.vertical, 4)
@@ -988,6 +1059,8 @@ private struct CustomExerciseSheet: View {
 private struct SetEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
     @FocusState private var isKeyboardFocused: Bool
 
     let set: WorkoutSet
@@ -995,34 +1068,74 @@ private struct SetEditorSheet: View {
     @State private var weightText: String
     @State private var repsText: String
     @State private var comment: String
+    @State private var isCompleted: Bool
     @State private var errorMessage: String?
 
     init(set: WorkoutSet) {
         self.set = set
-        _weightText = State(initialValue: set.weight.formatted(.number.precision(.fractionLength(0...2))))
+        _weightText = State(initialValue: "")
         _repsText = State(initialValue: "\(set.reps)")
         _comment = State(initialValue: set.comment)
+        _isCompleted = State(initialValue: set.isCompleted)
     }
 
     private var workoutStore: DefaultWorkoutStore {
         DefaultWorkoutStore(context: modelContext)
     }
 
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
+    }
+
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Weight", text: $weightText)
+                TextField("Weight (\(settings.unitSystem.symbol))", text: $weightText)
                     .keyboardType(.decimalPad)
                     .focused($isKeyboardFocused)
+
+                HStack {
+                    Button("- \(settings.formatIncrement())") {
+                        adjustWeight(by: -settings.weightIncrement)
+                    }
+
+                    Spacer()
+
+                    Button("+ \(settings.formatIncrement())") {
+                        adjustWeight(by: settings.weightIncrement)
+                    }
+                }
+                .buttonStyle(.borderless)
+
                 TextField("Reps", text: $repsText)
                     .keyboardType(.numberPad)
                     .focused($isKeyboardFocused)
+
+                HStack {
+                    Button("- 1") {
+                        adjustReps(by: -1)
+                    }
+
+                    Spacer()
+
+                    Button("+ 1") {
+                        adjustReps(by: 1)
+                    }
+                }
+                .buttonStyle(.borderless)
+
+                Toggle("Completed", isOn: $isCompleted)
                 TextField("Comment", text: $comment, axis: .vertical)
                     .lineLimit(2...4)
                     .focused($isKeyboardFocused)
             }
             .scrollDismissesKeyboard(.immediately)
             .navigationTitle("Edit Set")
+            .onAppear {
+                if weightText.isEmpty {
+                    weightText = settings.formatWeightInput(set.weight)
+                }
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") { dismiss() }
@@ -1042,15 +1155,28 @@ private struct SetEditorSheet: View {
         }
     }
 
+    private func adjustWeight(by delta: Double) {
+        let currentValue = Double(weightText.replacingOccurrences(of: ",", with: ".")) ?? 0
+        let updatedValue = max(currentValue + delta, 0)
+        weightText = updatedValue == 0 ? "" : updatedValue.formatted(.number.precision(.fractionLength(0...2)))
+    }
+
+    private func adjustReps(by delta: Int) {
+        let currentValue = Int(repsText) ?? 0
+        let updatedValue = max(currentValue + delta, 0)
+        repsText = updatedValue == 0 ? "" : "\(updatedValue)"
+    }
+
     private func save() {
-        guard let weight = Double(weightText.replacingOccurrences(of: ",", with: ".")),
+        guard let displayWeight = Double(weightText.replacingOccurrences(of: ",", with: ".")),
               let reps = Int(repsText) else {
             errorMessage = "Enter a valid weight and rep count."
             return
         }
 
         do {
-            try workoutStore.updateSet(set, weight: weight, reps: reps, comment: comment, isCompleted: true)
+            let storedWeight = settings.storedWeight(fromDisplayWeight: displayWeight)
+            try workoutStore.updateSet(set, weight: storedWeight, reps: reps, comment: comment, isCompleted: isCompleted)
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

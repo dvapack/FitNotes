@@ -20,6 +20,10 @@ struct FitNotesApp: App {
         case let .failed(error):
             PersistenceRecoveryView(
                 error: error,
+                resetErrorMessage: appState.resetErrorMessage,
+                onDismissResetError: {
+                    appState.resetErrorMessage = nil
+                },
                 onRetry: appState.reload,
                 onReset: appState.resetStoreAndReload
             )

@@ -188,6 +188,7 @@ struct LibraryView: View {
                 ForEach(exercises) { exercise in
                     ExerciseRow(
                         exercise: exercise,
+                        destination: { ExerciseInsightsView(exercise: exercise) },
                         onToggleFavorite: { toggleFavorite(exercise) },
                         onEdit: { exerciseToEdit = exercise },
                         onDelete: { exercisePendingDeletion = exercise },
@@ -277,37 +278,42 @@ struct LibraryView: View {
     }
 }
 
-private struct ExerciseRow: View {
+private struct ExerciseRow<Destination: View>: View {
     let exercise: Exercise
+    let destination: () -> Destination
     let onToggleFavorite: () -> Void
     let onEdit: () -> Void
     let onDelete: () -> Void
     let onAddAnother: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(exercise.name)
-                    .font(.headline)
-                if exercise.isFavorite {
-                    Image(systemName: "star.fill")
-                        .foregroundStyle(.yellow)
+        NavigationLink {
+            destination()
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(exercise.name)
+                        .font(.headline)
+                    if exercise.isFavorite {
+                        Image(systemName: "star.fill")
+                            .foregroundStyle(.yellow)
+                    }
+                    Spacer()
+                    Text(exercise.exerciseType.title)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text(exercise.exerciseType.title)
-                    .font(.caption)
+
+                if !exercise.notes.isEmpty {
+                    Text(exercise.notes)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("Rest \(exercise.defaultRestSeconds)s • \(exercise.preferredWeightUnit.title)")
+                    .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-
-            if !exercise.notes.isEmpty {
-                Text(exercise.notes)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-
-            Text("Rest \(exercise.defaultRestSeconds)s • \(exercise.preferredWeightUnit.title)")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
         }
         .swipeActions(edge: .leading, allowsFullSwipe: true) {
             Button(action: onToggleFavorite) {
@@ -537,17 +543,5 @@ private struct MuscleGroupEditorSheet: View {
             return
         }
         dismiss()
-    }
-}
-
-private extension Color {
-    init(hex: String) {
-        let sanitized = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        Scanner(string: sanitized).scanHexInt64(&int)
-        let red = Double((int >> 16) & 0xFF) / 255.0
-        let green = Double((int >> 8) & 0xFF) / 255.0
-        let blue = Double(int & 0xFF) / 255.0
-        self.init(red: red, green: green, blue: blue)
     }
 }

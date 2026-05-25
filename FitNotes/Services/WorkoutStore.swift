@@ -113,6 +113,7 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func deleteSet(_ workoutSet: WorkoutSet) throws {
+        try ensureWorkoutIsEditable(for: workoutSet)
         let workout = workoutSet.workout
         let exercise = workoutSet.exercise
         context.delete(workoutSet)
@@ -121,6 +122,8 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func updateSet(_ workoutSet: WorkoutSet, weight: Double, reps: Int, comment: String, isCompleted: Bool) throws {
+        try ensureWorkoutIsEditable(for: workoutSet)
+
         guard weight > 0 else {
             throw WorkoutStoreError.invalidWeight
         }
@@ -137,11 +140,16 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func toggleSetCompletion(_ workoutSet: WorkoutSet) throws {
+        try ensureWorkoutIsEditable(for: workoutSet)
         workoutSet.isCompleted.toggle()
         try context.save()
     }
 
     func moveSets(in workout: Workout, exercise: Exercise, fromOffsets: IndexSet, toOffset: Int) throws {
+        guard workout.isInProgress else {
+            throw WorkoutStoreError.workoutAlreadyFinished
+        }
+
         var sets = try fetchSets(for: workout, exercise: exercise)
         moveItems(in: &sets, fromOffsets: fromOffsets, toOffset: toOffset)
 
@@ -153,6 +161,10 @@ struct DefaultWorkoutStore: WorkoutStore {
     }
 
     func reorderExerciseGroups(in workout: Workout, orderedExerciseIDs: [PersistentIdentifier]) throws {
+        guard workout.isInProgress else {
+            throw WorkoutStoreError.workoutAlreadyFinished
+        }
+
         let sets = try fetchSets(for: workout)
         let groupedSets = Dictionary(grouping: sets) { $0.exercise?.persistentModelID }
 
@@ -268,6 +280,12 @@ struct DefaultWorkoutStore: WorkoutStore {
             set.setOrder = index + 1
         }
         try context.save()
+    }
+
+    private func ensureWorkoutIsEditable(for workoutSet: WorkoutSet) throws {
+        guard workoutSet.workout?.isInProgress != false else {
+            throw WorkoutStoreError.workoutAlreadyFinished
+        }
     }
 
     private func moveItems<T>(in items: inout [T], fromOffsets: IndexSet, toOffset: Int) {

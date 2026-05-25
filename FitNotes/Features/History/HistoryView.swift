@@ -22,49 +22,8 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        List {
-            if workouts.isEmpty {
-                ContentUnavailableView(
-                    "No workouts yet",
-                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                    description: Text("Finish a workout to see it here.")
-                )
-            } else {
-                Section("Overview") {
-                    LabeledContent("Workouts") {
-                        Text("\(workouts.count)")
-                    }
-
-                    LabeledContent("Sets") {
-                        Text("\(totalSets)")
-                    }
-                }
-
-                ForEach(workouts) { workout in
-                    NavigationLink {
-                        WorkoutHistoryDetailView(workout: workout)
-                    } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                .font(.headline)
-                            Text(workoutSummary(for: workout))
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            if !workout.comment.isEmpty {
-                                Text(workout.comment)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                            }
-                        }
-                    }
-                    .swipeActions {
-                        Button("Delete", role: .destructive) {
-                            workoutPendingDeletion = workout
-                        }
-                    }
-                }
-            }
+        TrainingReviewContentView(workouts: workouts) { workout in
+            workoutPendingDeletion = workout
         }
         .navigationTitle("History")
         .alert("Delete Workout?", isPresented: Binding(
@@ -94,11 +53,6 @@ struct HistoryView: View {
         } message: {
             Text(errorMessage ?? "")
         }
-    }
-
-    private func workoutSummary(for workout: Workout) -> String {
-        let exerciseCount = Set(workout.sets.compactMap { $0.exercise?.persistentModelID }).count
-        return "\(workout.sets.count) sets across \(exerciseCount) exercises"
     }
 
     private func confirmDeleteWorkout() {

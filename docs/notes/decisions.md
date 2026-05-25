@@ -19,3 +19,7 @@
 - Shared-store bootstrap no longer silently deletes the on-device SwiftData files after a load failure; recovery must be explicit and user-triggered.
 - Legacy or partially populated rows should be repaired in-place at startup so richer exercise and workout metadata has persisted defaults before later schema versioning work begins.
 - Pre-versioned SwiftData stores are treated as an explicit unsupported migration case: the app preserves those files, explains the limitation, and lets the user choose whether to reset local data.
+- Legacy-store fixes now prioritize preserving user data over forced reset, with best-effort recovery/import attempted before reset is offered as fallback.
+- Warning cleanup for this effort is limited to actionable app-owned warnings and runtime error paths, not benign Xcode/toolchain noise outside the project’s control.
+- Existing uncommitted feature work should remain untouched unless it directly intersects the persistence and stability repair path.
+- Pre-versioned stores are no longer considered reset-only by default; the active direction is explicit recovery first, reset second if recovery cannot succeed.

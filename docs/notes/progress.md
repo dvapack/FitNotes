@@ -25,34 +25,41 @@
 - [x] Add clearer duration and finish-time editing UX.
 
 ## Phase 7 Checklist: Exercise Insights and Goals
-- [ ] Add exercise overview screens.
-- [ ] Add per-exercise history screens.
-- [ ] Add richer PR presentation and goal tracking.
-- [ ] Link library items into exercise insights.
+- [x] Add exercise overview screens.
+- [x] Add per-exercise history screens.
+- [x] Add richer PR presentation and goal tracking.
+- [x] Link library items into exercise insights.
 
 ## Phase 8 Checklist: Calendar and Training Review
-- [ ] Add month calendar view.
-- [ ] Add list view and filtering.
-- [ ] Reuse category colors and workout summaries in calendar UI.
-- [ ] Add workout-detail and exercise-detail drill-ins from the calendar.
+- [x] Add month calendar view.
+- [x] Add list view and filtering.
+- [x] Reuse category colors and workout summaries in calendar UI.
+- [x] Add workout-detail and exercise-detail drill-ins from the calendar.
 
 ## Phase 9 Checklist: Settings and App Behavior Controls
-- [ ] Add persisted app settings model/service.
-- [ ] Add unit system and increment settings.
-- [ ] Add calendar, PR, set-complete, next-set, and wake-lock settings.
-- [ ] Add home screen display preferences.
+- [x] Add persisted app settings model/service.
+- [x] Add unit system and increment settings.
+- [x] Add calendar, PR, set-complete, next-set, and wake-lock settings.
+- [x] Add home screen display preferences.
 
 ## Phase 10 Checklist: Data Portability and Backup
-- [ ] Add full-app export.
-- [ ] Add restore flow.
-- [ ] Add spreadsheet export.
-- [ ] Add destructive reset flows with explicit confirmations.
+- [x] Add full-app export.
+- [x] Add restore flow.
+- [x] Add spreadsheet export.
+- [x] Add destructive reset flows with explicit confirmations.
 
 ## Phase 11 Checklist: Body Tracker
-- [ ] Add configurable body measurements.
-- [ ] Add custom measurement units and enable/disable behavior.
-- [ ] Add body history and graphing.
-- [ ] Add body-goal support.
+- [x] Add configurable body measurements.
+- [x] Add custom measurement units and enable/disable behavior.
+- [x] Add body history and graphing.
+- [x] Add body-goal support.
+
+## Phase 12 Checklist: Stability Cleanup and Legacy Store Recovery
+- [x] Reproduce and lock the failing legacy-store path.
+- [x] Implement real legacy-store recovery/import.
+- [x] Harden bootstrap/recovery UX.
+- [x] Clean up remaining actionable runtime error handling.
+- [x] Add disk-backed migration regression coverage.
 
 ## Work Log
 - 2026-05-23: Added the notes system and wrote the original roadmap, progress tracker, and decision log.
@@ -76,3 +83,13 @@
 - 2026-05-24: Added a legacy-data backfill pass at startup to persist defaults and repair ordering/snapshot fields for richer workout and exercise metadata, with regression tests.
 - 2026-05-24: Introduced a versioned SwiftData schema baseline, added migration-plan coverage, verified seeding/import defaults against the richer model, and clarified the explicit recovery path for pre-versioned stores.
 - 2026-05-24: Finished Phase 6 by adding in-workout exercise reordering, a session flow jump menu, a visible rest timer tied to exercise defaults, and editable finish-time/duration handling with regression coverage for workout time normalization.
+- 2026-05-24: Finished Phase 7 by adding exercise insight screens with progression, PR highlights, persisted goals, workout-history drill-ins, library deep-links, and goal backfill coverage.
+- 2026-05-24: Finished Phase 8 by turning History into a calendar-and-list training review flow with category and exercise filters, streak and weekly summary stats, day drill-ins, and direct links into workout details and exercise insights.
+- 2026-05-24: Finished Phase 9 by adding a persisted app-settings model with migration/backfill coverage, a dedicated Settings tab, global unit and increment controls, calendar week-start and PR display behavior, configurable set-complete and next-set defaults, workout wake-lock control, and home dashboard visibility preferences.
+- 2026-05-24: Finished Phase 10 by adding versioned full-backup export and restore, spreadsheet-friendly workout CSV export, explicit workouts-only and full-app reset flows in Settings, and regression coverage for backup round-trips and reset behavior.
+- 2026-05-24: Finished Phase 11 by adding a standalone body-tracking module with configurable measurements, custom units, enabled/disabled metrics, trend charts, directional goals, backup/reset integration, schema migration coverage, and new regression tests.
+- 2026-05-24: Completed a stability audit, confirmed the app currently builds cleanly and passes 56 tests on the `iPhone 17` simulator, and identified pre-versioned on-device store recovery for `NSCocoaErrorDomain 134504` as the active blocker for the next phase.
+- 2026-05-24: Finished Phase 12.1 by adding disk-backed migration regression coverage for current V3 stores, versioned V1/V2 migration, and pre-versioned legacy-store failure reproduction via a temporary Core Data store harness; startup now keeps legacy unversioned stores on the explicit recovery path instead of reopening them with the latest schema shape, and the suite now passes 61 tests on the `iPhone 17` simulator.
+- 2026-05-24: Finished Phase 12.2 by adding a real legacy-store recovery/import path that backs up pre-versioned stores, loads them through the original Core Data model, imports them into a fresh V3 store with set ordering and snapshot defaults preserved, surfaces preserved-backup details in recovery errors/UI, and now passes 63 tests on the `iPhone 17` simulator.
+- 2026-05-25: Finished Phase 12.3 by distinguishing ordinary load, failed legacy recovery, and post-recovery startup failures in bootstrap state; recovery UI now shows preserved-backup presence and offers explicit current-store-only versus delete-both reset actions, startup logging records the path taken, and regression coverage now locks the post-recovery failure and backup-aware reset flows.
+- 2026-05-25: Finished Phase 12.4 by replacing assertion-only body-tracking persistence failures with visible alerts, making settings changes restore the prior saved value when persistence fails instead of silently drifting in memory, and adding regression coverage for save-success and save-failure rollback behavior; the suite now passes 69 tests on the `iPhone 17` simulator.

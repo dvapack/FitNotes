@@ -1,10 +1,17 @@
+import SwiftData
 import SwiftUI
 
 struct WorkoutHistoryDetailView: View {
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
     let workout: Workout
 
     private var groupedSets: [WorkoutExerciseGroup] {
         workout.sets.groupedByExercise()
+    }
+
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
     }
 
     var body: some View {
@@ -45,18 +52,22 @@ struct WorkoutHistoryDetailView: View {
                 } else {
                     ForEach(groupedSets) { group in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(group.title)
-                                .font(.headline)
-                            Text(group.muscleGroupName)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                            if let exercise = group.exercise {
+                                NavigationLink {
+                                    ExerciseInsightsView(exercise: exercise)
+                                } label: {
+                                    exerciseHeader(for: group)
+                                }
+                            } else {
+                                exerciseHeader(for: group)
+                            }
 
                             ForEach(group.sets) { workoutSet in
                                 HStack {
                                     Text("Set \(workoutSet.setOrder)")
                                         .foregroundStyle(.secondary)
                                     Spacer()
-                                    Text("\(workoutSet.weight.formatted(.number.precision(.fractionLength(0...2)))) kg")
+                                    Text(settings.formatWeight(workoutSet.weight))
                                     Text("x")
                                         .foregroundStyle(.secondary)
                                     Text("\(workoutSet.reps)")
@@ -70,5 +81,16 @@ struct WorkoutHistoryDetailView: View {
             }
         }
         .navigationTitle("Workout Detail")
+    }
+
+    @ViewBuilder
+    private func exerciseHeader(for group: WorkoutExerciseGroup) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(group.title)
+                .font(.headline)
+            Text(group.muscleGroupName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
     }
 }

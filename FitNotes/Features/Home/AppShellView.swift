@@ -37,6 +37,13 @@ struct AppShellView: View {
             .tabItem {
                 Label("Import", systemImage: "square.and.arrow.down")
             }
+
+            NavigationStack {
+                SettingsView()
+            }
+            .tabItem {
+                Label("Settings", systemImage: "gearshape")
+            }
         }
     }
 }

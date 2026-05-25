@@ -4,6 +4,8 @@ import UniformTypeIdentifiers
 
 struct ImportView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
 
     @State private var showingFileImporter = false
     @State private var selectedFileName: String?
@@ -13,6 +15,10 @@ struct ImportView: View {
 
     private var importer: FitNotesCSVImporter {
         FitNotesCSVImporter(context: modelContext)
+    }
+
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
     }
 
     var body: some View {
@@ -65,7 +71,7 @@ struct ImportView: View {
                             Text(row.categoryName)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
-                            Text("\(row.date.formatted(date: .abbreviated, time: .omitted)) • \(row.weight.formatted(.number.precision(.fractionLength(0...2)))) kg x \(row.reps)")
+                            Text("\(row.date.formatted(date: .abbreviated, time: .omitted)) • \(settings.formatWeight(row.weight)) x \(row.reps)")
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         }

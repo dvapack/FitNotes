@@ -2,17 +2,27 @@ import SwiftUI
 
 struct PersistenceRecoveryView: View {
     let error: AppBootstrapError
+    let resetErrorMessage: String?
+    let onDismissResetError: () -> Void
     let onRetry: () -> Void
-    let onReset: () -> Void
+    let onReset: (_ includeBackupStore: Bool) -> Void
 
-    @State private var showingResetConfirmation = false
+    @State private var showingResetOptions = false
 
     private var storePath: String? {
         error.storeURL?.path
     }
 
+    private var backupStorePath: String? {
+        error.backupStoreURL?.path
+    }
+
     private var canReset: Bool {
         error.storeURL != nil
+    }
+
+    private var canDeletePreservedBackup: Bool {
+        error.backupStoreURL != nil
     }
 
     var body: some View {
@@ -24,9 +34,9 @@ struct PersistenceRecoveryView: View {
                         .foregroundStyle(.orange)
 
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("Local Data Needs Recovery")
+                        Text(error.recoveryTitle)
                             .font(.title2.bold())
-                        Text("FitNotes couldn't finish loading its local data, so your existing data has been left in place.")
+                        Text(error.recoveryMessage)
                             .foregroundStyle(.secondary)
                     }
 
@@ -43,8 +53,20 @@ struct PersistenceRecoveryView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("Next Steps")
                             .font(.headline)
-                        Text(error.recoverySuggestion)
+                            Text(error.recoverySuggestion)
                             .foregroundStyle(.secondary)
+                    }
+
+                    if let backupStorePath {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Preserved Backup")
+                                .font(.headline)
+                            Text(backupStorePath)
+                                .font(.footnote.monospaced())
+                                .textSelection(.enabled)
+                            Text(error.backupStoreStillExists ? "The preserved backup files are still on disk." : "The preserved backup path was recorded, but the files are no longer present on disk.")
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     VStack(alignment: .leading, spacing: 8) {
@@ -60,7 +82,7 @@ struct PersistenceRecoveryView: View {
 
                         if canReset {
                             Button("Reset Local Data", role: .destructive) {
-                                showingResetConfirmation = true
+                                showingResetOptions = true
                             }
                             .buttonStyle(.bordered)
                         }
@@ -75,11 +97,34 @@ struct PersistenceRecoveryView: View {
             }
             .navigationTitle("FitNotes")
         }
-        .alert("Reset local data?", isPresented: $showingResetConfirmation) {
-            Button("Reset", role: .destructive, action: onReset)
+        .confirmationDialog("Reset local data?", isPresented: $showingResetOptions, titleVisibility: .visible) {
+            Button("Reset Current Store", role: .destructive) {
+                onReset(false)
+            }
+
+            if canDeletePreservedBackup {
+                Button("Reset and Delete Preserved Backup", role: .destructive) {
+                    onReset(true)
+                }
+            }
+
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This deletes the current on-device FitNotes store files so the app can create a new empty store.")
+            Text(error.resetConfirmationMessage)
+        }
+        .alert("Reset Failed", isPresented: Binding(
+            get: { resetErrorMessage != nil },
+            set: { isPresented in
+                if !isPresented {
+                    onDismissResetError()
+                }
+            }
+        )) {
+            Button("OK", role: .cancel) {
+                onDismissResetError()
+            }
+        } message: {
+            Text(resetErrorMessage ?? "")
         }
     }
 }

@@ -3,6 +3,8 @@ import SwiftData
 
 struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
+    @Query(sort: [SortDescriptor(\AppSettings.createdAt)])
+    private var appSettings: [AppSettings]
     @Query(sort: [SortDescriptor(\MuscleGroup.sortOrder), SortDescriptor(\MuscleGroup.name)])
     private var muscleGroups: [MuscleGroup]
     @Query(
@@ -27,6 +29,10 @@ struct HomeView: View {
         DefaultWorkoutStore(context: modelContext)
     }
 
+    private var settings: AppSettingsSnapshot {
+        AppSettingsSnapshot(settings: appSettings.first)
+    }
+
     private var completedWorkoutCount: Int {
         completedWorkouts.count
     }
@@ -45,13 +51,15 @@ struct HomeView: View {
 
     var body: some View {
         List {
-            Section("Overview") {
-                LabeledContent("Completed Workouts") {
-                    Text("\(completedWorkoutCount)")
-                }
+            if settings.showsHomeOverview {
+                Section("Overview") {
+                    LabeledContent("Completed Workouts") {
+                        Text("\(completedWorkoutCount)")
+                    }
 
-                LabeledContent("Tracked Sets") {
-                    Text("\(totalTrackedSets)")
+                    LabeledContent("Tracked Sets") {
+                        Text("\(totalTrackedSets)")
+                    }
                 }
             }
 
@@ -75,29 +83,31 @@ struct HomeView: View {
                 }
             }
 
-            Section("Last 5 Workouts") {
-                if recentWorkouts.isEmpty {
-                    ContentUnavailableView(
-                        "No workouts yet",
-                        systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                        description: Text("Finish a workout to see your latest sessions here.")
-                    )
-                } else {
-                    ForEach(recentWorkouts) { workout in
-                        NavigationLink {
-                            WorkoutHistoryDetailView(workout: workout)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.headline)
-                                Text(workoutSummary(for: workout))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                if !workout.comment.isEmpty {
-                                    Text(workout.comment)
-                                        .font(.caption)
+            if settings.showsRecentWorkouts {
+                Section("Last 5 Workouts") {
+                    if recentWorkouts.isEmpty {
+                        ContentUnavailableView(
+                            "No workouts yet",
+                            systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                            description: Text("Finish a workout to see your latest sessions here.")
+                        )
+                    } else {
+                        ForEach(recentWorkouts) { workout in
+                            NavigationLink {
+                                WorkoutHistoryDetailView(workout: workout)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(workout.startedAt.formatted(date: .abbreviated, time: .shortened))
+                                        .font(.headline)
+                                    Text(workoutSummary(for: workout))
+                                        .font(.subheadline)
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(2)
+                                    if !workout.comment.isEmpty {
+                                        Text(workout.comment)
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
                                 }
                             }
                         }

@@ -34,6 +34,17 @@ enum ExerciseProgressionView: String, Codable, CaseIterable, Identifiable {
     case totalReps
 
     var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .maxWeight:
+            return "Max Weight"
+        case .totalVolume:
+            return "Volume"
+        case .totalReps:
+            return "Reps"
+        }
+    }
 }
 
 @Model
@@ -48,6 +59,9 @@ final class Exercise {
     var preferredWeightUnitRaw: String?
     var defaultRestSeconds: Int
     var defaultProgressionViewRaw: String?
+    var goalMetricRaw: String?
+    var goalTargetValue: Double?
+    var goalNotesRaw: String?
 
     var muscleGroup: MuscleGroup?
 
@@ -74,6 +88,23 @@ final class Exercise {
         set { defaultProgressionViewRaw = newValue.rawValue }
     }
 
+    var goalMetric: ExerciseProgressionView? {
+        get {
+            guard let goalMetricRaw else { return nil }
+            return ExerciseProgressionView(rawValue: goalMetricRaw)
+        }
+        set { goalMetricRaw = newValue?.rawValue }
+    }
+
+    var goalNotes: String {
+        get { goalNotesRaw ?? "" }
+        set { goalNotesRaw = newValue }
+    }
+
+    var hasGoal: Bool {
+        goalMetric != nil && (goalTargetValue ?? 0) > 0
+    }
+
     init(
         name: String,
         normalizedName: String,
@@ -85,6 +116,9 @@ final class Exercise {
         preferredWeightUnit: WeightUnit = .kg,
         defaultRestSeconds: Int = 90,
         defaultProgressionView: ExerciseProgressionView = .maxWeight,
+        goalMetric: ExerciseProgressionView? = nil,
+        goalTargetValue: Double? = nil,
+        goalNotes: String = "",
         muscleGroup: MuscleGroup? = nil
     ) {
         self.name = name
@@ -97,6 +131,9 @@ final class Exercise {
         self.preferredWeightUnitRaw = preferredWeightUnit.rawValue
         self.defaultRestSeconds = defaultRestSeconds
         self.defaultProgressionViewRaw = defaultProgressionView.rawValue
+        self.goalMetricRaw = goalMetric?.rawValue
+        self.goalTargetValue = goalTargetValue
+        self.goalNotesRaw = goalNotes
         self.muscleGroup = muscleGroup
         self.workoutSets = []
     }

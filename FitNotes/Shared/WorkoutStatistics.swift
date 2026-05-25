@@ -25,7 +25,7 @@ enum StatisticsTimeRange: String, CaseIterable, Identifiable {
         }
     }
 
-    fileprivate func startDate(relativeTo latestDate: Date, calendar: Calendar) -> Date? {
+    func startDate(relativeTo latestDate: Date, calendar: Calendar) -> Date? {
         switch self {
         case .last30Days:
             return calendar.date(byAdding: .day, value: -29, to: latestDate)
